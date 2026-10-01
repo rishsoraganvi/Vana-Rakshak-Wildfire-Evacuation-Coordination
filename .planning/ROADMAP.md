@@ -14,6 +14,13 @@ Six phases turn the supplied 12+ week implementation plan into vertical, verifia
 
 **Exit criteria:** migrations run; services have health probes; mocked ingest persists deduplicated observations; schema and contracts are tested; a seeded simulated clock produces repeatable inputs.
 
+**Plans:** 3 plans
+
+Plans:
+- [ ] 01-01-PLAN.md — Compose, migrations, shared config, and FastAPI health tracer
+- [ ] 01-02-PLAN.md — Typed monitoring/fire contracts, clocks, parsers, and fixtures
+- [ ] 01-03-PLAN.md — Durable offline ingest, freshness, dedupe, and trigger state
+
 ## Phase 2: MVP Detection to Route
 
 **Goal:** A hotspot or replay event produces a basic, auditable evacuation route suggestion for one pilot settlement cluster.
