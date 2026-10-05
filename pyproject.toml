@@ -1,0 +1,46 @@
+[project]
+name = "vana-rakshak"
+version = "0.1.0"
+description = "Vana-Rakshak wildfire evacuation coordination foundation"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+  "alembic==1.20.0",
+  "fastapi==0.142.2",
+  "httpx==0.28.1",
+  "mypy==2.3.1",
+  "pydantic==2.13.5",
+  "pydantic-settings==2.15.0",
+  "psycopg[binary]==3.3.6",
+  "pytest==8.4.2",
+  "pyyaml==6.0.3",
+  "redis==8.1.0",
+  "ruff==0.16.9",
+  "shapely==2.1.2",
+  "sqlalchemy==2.0.54",
+  "uvicorn[standard]==0.35.0",
+]
+
+[tool.uv.workspace]
+members = ["packages/wildfire_core", "apps/api_gateway"]
+
+[tool.uv]
+default-groups = ["dev"]
+
+[dependency-groups]
+dev = ["hypothesis==6.168.3", "types-pyyaml==6.0.12.20250915"]
+
+[tool.pytest.ini_options]
+markers = ["compose: requires the local Docker Compose services"]
+pythonpath = ["packages/wildfire_core/src", "apps/api_gateway/src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+mypy_path = ["packages/wildfire_core/src"]

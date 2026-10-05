@@ -1,0 +1,15 @@
+app_env: dev
+log_level: INFO
+aoi_name: Bandipur-Nagarahole-BRT
+aoi_bbox: 76.0,11.5,77.3,12.4
+pilot_cluster_id: bandipur
+weather_provider: open-meteo
+firms_sources:
+  - VIIRS_SNPP_NRT
+  - VIIRS_NOAA20_NRT
+  - MODIS_NRT
+llm_enabled: false
+llm_provider: anthropic
+llm_model: ""
+database_url: postgresql+psycopg://wildfire:change_me@postgres:5432/wildfire
+redis_url: redis://redis:6379/0

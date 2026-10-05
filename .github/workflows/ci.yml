@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.8.17"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: uv sync --locked
+      - run: uv run ruff check .
+      - run: uv run mypy packages/wildfire_core
+      - run: uv run pytest tests/unit -q
+
+  compose-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.8.17"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: uv sync --locked
+      - run: docker compose up -d --build --wait
+      - run: uv run alembic -c infra/migrations/alembic.ini upgrade head
+      - run: uv run pytest tests/integration -m compose -q
+        env:
+          COMPOSE_SMOKE: "1"
+          DATABASE_URL: postgresql+psycopg://wildfire:change_me@localhost:5432/wildfire
+          REDIS_URL: redis://localhost:6379/0
+      - if: always()
+        run: docker compose down -v
