@@ -18,10 +18,14 @@ dependencies = [
   "shapely==2.1.2",
   "sqlalchemy==2.0.54",
   "uvicorn[standard]==0.35.0",
+  "wildfire-core",
 ]
 
 [tool.uv.workspace]
 members = ["packages/wildfire_core", "apps/api_gateway", "apps/ingest_worker"]
+
+[tool.uv.sources]
+wildfire-core = { workspace = true }
 
 [tool.uv]
 default-groups = ["dev"]

@@ -983,6 +983,7 @@ dependencies = [
     { name = "shapely" },
     { name = "sqlalchemy" },
     { name = "uvicorn", extra = ["standard"] },
+    { name = "wildfire-core" },
 ]
 
 [package.dev-dependencies]
@@ -1007,6 +1008,7 @@ requires-dist = [
     { name = "shapely", specifier = "==2.1.2" },
     { name = "sqlalchemy", specifier = "==2.0.54" },
     { name = "uvicorn", extras = ["standard"], specifier = "==0.35.0" },
+    { name = "wildfire-core", editable = "packages/wildfire_core" },
 ]
 
 [package.metadata.requires-dev]
