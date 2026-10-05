@@ -28,6 +28,9 @@ def upgrade() -> None:
             track double precision,
             origin data_origin NOT NULL DEFAULT 'live',
             raw jsonb,
+            freshness_status text NOT NULL DEFAULT 'fresh',
+            freshness_age_seconds double precision,
+            freshness_threshold_seconds double precision,
             cluster_id uuid,
             ingested_at timestamptz NOT NULL DEFAULT now(),
             UNIQUE (source, acq_datetime, lat, lon)
@@ -50,6 +53,10 @@ def upgrade() -> None:
             wind_gust_ms double precision,
             precip_mm double precision,
             origin data_origin NOT NULL DEFAULT 'live',
+            raw jsonb,
+            freshness_status text NOT NULL DEFAULT 'fresh',
+            freshness_age_seconds double precision,
+            freshness_threshold_seconds double precision,
             UNIQUE (provider, lat, lon, valid_time, issued_at)
         );
         CREATE INDEX ix_weather_observations_valid_time

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from uuid import uuid4
 
 from sqlalchemy import Engine, text
@@ -45,7 +45,7 @@ def record_new_hotspot_trigger(
                 ORDER BY detected_at DESC LIMIT 1
                 """
             ),
-            {"cutoff": detected_at.timestamp() - debounce_seconds},
+            {"cutoff": detected_at - timedelta(seconds=debounce_seconds)},
         ).first()
         incident_id = connection.execute(
             text(

@@ -34,6 +34,9 @@ hotspots = Table(
     Column("scan", Float),
     Column("track", Float),
     Column("origin", data_origin, nullable=False), Column("raw", JSON),
+    Column("freshness_status", String, nullable=False),
+    Column("freshness_age_seconds", Float),
+    Column("freshness_threshold_seconds", Float),
     Column("cluster_id", UUID(as_uuid=True)),
     Column("ingested_at", DateTime(timezone=True), nullable=False),
 )
@@ -54,4 +57,8 @@ weather_observations = Table(
     Column("wind_gust_ms", Float),
     Column("precip_mm", Float),
     Column("origin", data_origin, nullable=False),
+    Column("raw", JSON),
+    Column("freshness_status", String, nullable=False),
+    Column("freshness_age_seconds", Float),
+    Column("freshness_threshold_seconds", Float),
 )
