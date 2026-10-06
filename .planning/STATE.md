@@ -1,15 +1,15 @@
 ---
 gsd_state_version: 1.0
-status: discuss_complete
-stopped_at: Phase_2_discuss_complete
-last_updated: "2026-10-06T00:00:00.000Z"
+status: ready_to_execute
+stopped_at: Phase_2_plan_complete
+last_updated: "2026-10-06T12:00:00.000Z"
 state_head: 25349d3
 progress:
   total_phases: 6
   completed_phases: 1
-  total_plans: 3
+  total_plans: 6
   completed_plans: 3
-  percent: 17
+  percent: 25
 ---
 
 # Project State
@@ -19,14 +19,14 @@ progress:
 See: `.planning/PROJECT.md` (updated 2026-10-01)
 
 **Core value:** A human reviewer can quickly understand and safely approve or correct a traceable evacuation plan built from current hazard, route, shelter, and resource data.
-**Current focus:** Phase 2 - MVP Detection to Route (discuss complete, ready to plan)
+**Current focus:** Phase 2 - MVP Detection to Route (plans generated, ready to execute)
 
 ## Current Position
 
-- Phase: 2 of 6 (in progress — discuss complete)
-- Status: Discuss complete, CONTEXT.md written
-- Progress: 0% of Phase 2; 17% of milestone
-- Last activity: Phase 2 discuss session completed — 17 decisions locked in 02-CONTEXT.md
+- Phase: 2 of 6 (in progress — plans generated)
+- Status: Plans complete (02-01-PLAN.md, 02-02-PLAN.md, 02-03-PLAN.md)
+- Progress: 0% of Phase 2; 25% of milestone
+- Last activity: Phase 2 planning completed — 3 execution plans generated
 
 ## Decisions and Constraints
 
@@ -46,19 +46,20 @@ See: `.planning/PROJECT.md` (updated 2026-10-01)
 
 ## Recent Decisions
 
-- Phase 1 uses four ordered Alembic revisions for AOI, monitoring, incidents/triggers, and shared-state/audit primitives.
-- FIRMS and weather persistence retains raw payload, origin, and freshness metadata with database uniqueness keys.
-- Postgres is durable shared-state truth; Redis remains a health/event boundary.
+- Phase 2 Plan 1: Contracts, Fire CA Model, Weather Agent, Hotspot Clustering.
+- Phase 2 Plan 2: OSM Road Graph, Route Utility, Coordinator v0 (LangGraph + Groq), Alembic migration.
+- Phase 2 Plan 3: Read-only API (/api/v1), Audit rows persistence, Replay script, Integration and Smoke test suite.
 
 ## Next Action
 
-Run `/gsd-plan-phase 2` to create Phase 2 PLAN.md files from 02-CONTEXT.md.
+Run `/gsd-execute-phase 2` or `/gsd-next` to begin executing Plan 1 (`02-01-PLAN.md`).
 
 ---
 *State initialized: 2026-10-01*
 
 ## Session
 
-**Last session:** 2026-10-06T00:00:00.000Z
-**Stopped at:** Phase_2_discuss_complete
+**Last session:** 2026-10-06T12:00:00.000Z
+**Stopped at:** Phase_2_plan_complete
 **Context:** .planning/phases/02-mvp-detection-to-route/02-CONTEXT.md
+
