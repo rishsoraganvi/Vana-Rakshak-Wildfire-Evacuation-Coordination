@@ -51,6 +51,17 @@ class Settings(BaseModel):
     redis_url: SecretStr
     postgres_password: SecretStr = SecretStr("change_me")
 
+    # Phase 2 additions
+    groq_api_key: SecretStr = SecretStr("")
+    osm_cache_path: Path = Path("data/osm/bandipur_road_graph.graphml")
+    fire_ensemble_seeds: tuple[int, ...] = (42, 43, 44)
+    fire_grid_resolution_m: int = 250
+    dbscan_eps_deg: float = 0.01
+    dbscan_min_samples: int = 3
+    route_fire_penalty_near: float = 5.0
+    llm_rationale_max_tokens: int = 400
+    llm_request_timeout_s: int = 30
+
     @field_validator("aoi_bbox", mode="before")
     @classmethod
     def parse_bbox(cls, value: Any) -> Any:
@@ -85,6 +96,8 @@ _ENV_MAP = {
     "DATABASE_URL": "database_url",
     "REDIS_URL": "redis_url",
     "POSTGRES_PASSWORD": "postgres_password",
+    "GROQ_API_KEY": "groq_api_key",
+    "OSM_CACHE_PATH": "osm_cache_path",
 }
 
 
@@ -94,6 +107,8 @@ def load_settings(config_path: Path | None = None) -> Settings:
     values: dict[str, Any] = dict(defaults or {})
     if isinstance(values.get("firms_sources"), list):
         values["firms_sources"] = tuple(values["firms_sources"])
+    if isinstance(values.get("fire_ensemble_seeds"), list):
+        values["fire_ensemble_seeds"] = tuple(values["fire_ensemble_seeds"])
     for env_name, field_name in _ENV_MAP.items():
         if env_name not in os.environ:
             continue
@@ -102,6 +117,8 @@ def load_settings(config_path: Path | None = None) -> Settings:
             values[field_name] = tuple(item.strip() for item in raw.split(",") if item.strip())
         elif field_name == "llm_enabled":
             values[field_name] = raw.lower() in {"1", "true", "yes", "on"}
+        elif field_name == "osm_cache_path":
+            values[field_name] = Path(raw)
         else:
             values[field_name] = raw
     return Settings.model_validate(values)
