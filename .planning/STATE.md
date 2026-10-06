@@ -1,8 +1,8 @@
 ---
 gsd_state_version: 1.0
-status: phase_complete
-stopped_at: Phase_1_complete
-last_updated: "2026-10-05T00:00:00.000Z"
+status: discuss_complete
+stopped_at: Phase_2_discuss_complete
+last_updated: "2026-10-06T00:00:00.000Z"
 state_head: 25349d3
 progress:
   total_phases: 6
@@ -19,14 +19,14 @@ progress:
 See: `.planning/PROJECT.md` (updated 2026-10-01)
 
 **Core value:** A human reviewer can quickly understand and safely approve or correct a traceable evacuation plan built from current hazard, route, shelter, and resource data.
-**Current focus:** Phase 2 - MVP Detection to Route
+**Current focus:** Phase 2 - MVP Detection to Route (discuss complete, ready to plan)
 
 ## Current Position
 
-- Phase: 1 of 6 (complete)
-- Status: Verified
-- Progress: 100% of Phase 1; 17% of milestone
-- Last activity: Phase 1 verification passed with 12/12 must-haves
+- Phase: 2 of 6 (in progress — discuss complete)
+- Status: Discuss complete, CONTEXT.md written
+- Progress: 0% of Phase 2; 17% of milestone
+- Last activity: Phase 2 discuss session completed — 17 decisions locked in 02-CONTEXT.md
 
 ## Decisions and Constraints
 
@@ -52,13 +52,13 @@ See: `.planning/PROJECT.md` (updated 2026-10-01)
 
 ## Next Action
 
-Run `/skill:gsd-discuss-phase 2` to gather context for the MVP detection-to-route phase.
+Run `/gsd-plan-phase 2` to create Phase 2 PLAN.md files from 02-CONTEXT.md.
 
 ---
 *State initialized: 2026-10-01*
 
 ## Session
 
-**Last session:** 2026-10-05T00:00:00.000Z
-**Stopped at:** Phase_1_complete
-**Verification:** .planning/phases/01-foundations-and-data-contracts/01-VERIFICATION.md
+**Last session:** 2026-10-06T00:00:00.000Z
+**Stopped at:** Phase_2_discuss_complete
+**Context:** .planning/phases/02-mvp-detection-to-route/02-CONTEXT.md
