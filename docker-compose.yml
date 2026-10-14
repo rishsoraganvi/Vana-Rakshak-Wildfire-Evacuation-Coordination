@@ -39,7 +39,7 @@ services:
       AOI_BBOX: ${AOI_BBOX:-76.0,11.5,77.3,12.4}
       PILOT_CLUSTER_ID: ${PILOT_CLUSTER_ID:-bandipur}
     ports:
-      - "${API_GATEWAY_PORT:-8000}:8000"
+      - "127.0.0.1:${API_GATEWAY_PORT:-8000}:8000"
     depends_on:
       postgres:
         condition: service_healthy
