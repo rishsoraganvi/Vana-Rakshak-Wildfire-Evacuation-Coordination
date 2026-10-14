@@ -1,16 +1,16 @@
----
-gsd_state_version: 1.0
+gsd_state_version: "1.0"
 status: ready_to_execute
-stopped_at: Plan_02_01_complete
-last_updated: "2026-10-06T13:30:00.000Z"
-state_head: 9cb429a
+current_phase: 2
+stopped_at: Completed 02-02-PLAN.md
+last_updated: "2026-10-14T10:49:39.258Z"
+state_head: 734dbe07a170fd961b62f66476ae0f64114c334c
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 6
-  completed_plans: 4
-  percent: 33
----
+  completed_plans: 5
+  percent: 17
+current_phase_name: MVP Detection to Route
 
 # Project State
 
@@ -19,14 +19,17 @@ progress:
 See: `.planning/PROJECT.md` (updated 2026-10-01)
 
 **Core value:** A human reviewer can quickly understand and safely approve or correct a traceable evacuation plan built from current hazard, route, shelter, and resource data.
-**Current focus:** Phase 2 - MVP Detection to Route (Plan 02-01 complete, executing Plan 02-02)
+**Current focus:** Phase 02 — MVP Detection to Route
 
 ## Current Position
 
-- Phase: 2 of 6 (in progress — Plan 02-01 complete)
-- Status: Plan 02-01 complete (02-01-SUMMARY.md recorded)
-- Progress: 33% of Phase 2 (1/3 plans); 33% of milestone
-- Last activity: Plan 02-01 executed — contracts, fire CA model, weather agent, hotspot clustering
+Current Phase: 2
+
+- Phase: 2 of 6 (in progress)
+- Current Plan: 3 of 3
+- Status: Plan 02-02 complete (02-02-SUMMARY.md recorded); Plan 02-03 next
+- Progress: 67% of Phase 2 (2/3 plans); 33% of milestone
+- Last activity: Plan 02-02 executed — OSM graph, fire-aware routing, Coordinator v0, Groq adapter, and plan/audit persistence
 
 ## Decisions and Constraints
 
@@ -47,19 +50,28 @@ See: `.planning/PROJECT.md` (updated 2026-10-01)
 ## Recent Decisions
 
 - Phase 2 Plan 1 complete: Phase 2 schemas exported, DBSCAN clustering, Weather Agent, and CA 3-seed ensemble simulator implemented and tested.
-- Phase 2 Plan 2 up next: OSM Road Graph caching, Route Utility (Dijkstra with fire penalty), Coordinator v0 (LangGraph + Groq), Alembic migration.
+- Phase 2 Plan 2 complete: OSM Graph, Route Utility, Coordinator v0, and additive plan/audit migration.
 - Phase 2 Plan 3: Read-only API (/api/v1), Audit rows persistence, Replay script, Integration and Smoke test suite.
+- Route results identify exactly one settlement or fire-cluster origin; Coordinator routes use cluster origins.
+- Safe road nodes nearest each AOI boundary are route exits because OSM data has no explicit exit tags.
+- Existing `agent_runs` is extended additively, with full CoordinatorPlan JSON stored in `plan_versions.plan_data`.
+- Trigger details retain exact hotspot IDs so Coordinator observations remain incident-scoped.
 
 ## Next Action
 
-Execute Plan 02-02 (`02-02-PLAN.md` — OSM Road Graph, Route Utility, Coordinator v0, Alembic migration).
+Execute Plan 02-03 (`02-03-PLAN.md` — Read-Only API, Audit Persistence, Replay Script, Full Test Suite).
 
 ---
 *State initialized: 2026-10-01*
 
 ## Session
 
-**Last session:** 2026-10-06T12:00:00.000Z
-**Stopped at:** Phase_2_plan_complete
-**Context:** .planning/phases/02-mvp-detection-to-route/02-CONTEXT.md
+**Last session:** 2026-10-14T10:49:39.052Z
+**Stopped at:** Completed 02-02-PLAN.md
+**Resume file:** None
 
+## Performance Metrics
+
+| Plan | Duration | Tasks | Files |
+|------|----------|-------|-------|
+| Phase 02 P02 | 94 min | 7 tasks | 25 files |

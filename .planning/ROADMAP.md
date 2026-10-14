@@ -32,12 +32,12 @@ Plans:
 
 **Exit criteria:** end-to-end replay passes with mocked LLM; output contains P50/P90 forecast data and route; audit entries cover every node/tool call; fallback works with LLM disabled; core tests pass.
 
-**Plans:** 1/3 plans complete
+**Plans:** 2/3 plans executed
 
 Plans:
 
 - [x] 02-01-PLAN.md — Contracts, Fire CA Model, Weather Agent, Hotspot Clustering
-- [ ] 02-02-PLAN.md — OSM Graph, Route Utility, Coordinator v0 (LangGraph + Groq)
+- [x] 02-02-PLAN.md — OSM Graph, Route Utility, Coordinator v0 (LangGraph + Groq)
 - [ ] 02-03-PLAN.md — Read-Only API, Audit Persistence, Replay Script, Full Test Suite
 
 ## Phase 3: Capacity-Aware Coordinated Planning
