@@ -1,10 +1,11 @@
 <?xml version='1.0' encoding='utf-8'?>
 <graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
-  <key id="d10" for="edge" attr.name="oneway" attr.type="string" />
+  <key id="d11" for="edge" attr.name="highway" attr.type="string" />
+  <key id="d10" for="edge" attr.name="name" attr.type="string" />
   <key id="d9" for="edge" attr.name="maxspeed" attr.type="string" />
-  <key id="d8" for="edge" attr.name="highway" attr.type="string" />
-  <key id="d7" for="edge" attr.name="length" attr.type="string" />
-  <key id="d6" for="edge" attr.name="osmid" attr.type="string" />
+  <key id="d8" for="edge" attr.name="speed_kph" attr.type="string" />
+  <key id="d7" for="edge" attr.name="travel_time" attr.type="string" />
+  <key id="d6" for="edge" attr.name="length" attr.type="string" />
   <key id="d5" for="node" attr.name="street_count" attr.type="string" />
   <key id="d4" for="node" attr.name="osmid" attr.type="string" />
   <key id="d3" for="node" attr.name="x" attr.type="string" />
@@ -31,25 +32,36 @@
       <data key="d5">2</data>
     </node>
     <edge source="1000001" target="1000002" id="0">
-      <data key="d6">1</data>
-      <data key="d7">1000.0</data>
-      <data key="d8">residential</data>
-      <data key="d9">30</data>
-      <data key="d10">True</data>
+      <data key="d6">2000.0</data>
+      <data key="d7">180.0</data>
+      <data key="d8">40.0</data>
+      <data key="d9">40</data>
+      <data key="d10">NH-212</data>
+      <data key="d11">primary</data>
     </edge>
-    <edge source="1000001" target="1000002" id="1">
-      <data key="d6">3</data>
-      <data key="d7">1050.0</data>
-      <data key="d8">residential</data>
-      <data key="d9">30</data>
-      <data key="d10">True</data>
+    <edge source="1000002" target="1000001" id="0">
+      <data key="d6">2000.0</data>
+      <data key="d7">180.0</data>
+      <data key="d8">40.0</data>
+      <data key="d9">40</data>
+      <data key="d10">NH-212</data>
+      <data key="d11">primary</data>
     </edge>
     <edge source="1000002" target="1000003" id="0">
-      <data key="d6">2</data>
-      <data key="d7">1200.0</data>
-      <data key="d8">residential</data>
-      <data key="d9">30</data>
-      <data key="d10">True</data>
+      <data key="d6">3000.0</data>
+      <data key="d7">270.0</data>
+      <data key="d8">40.0</data>
+      <data key="d9">40</data>
+      <data key="d10">Forest Rd</data>
+      <data key="d11">secondary</data>
+    </edge>
+    <edge source="1000003" target="1000002" id="0">
+      <data key="d6">3000.0</data>
+      <data key="d7">270.0</data>
+      <data key="d8">40.0</data>
+      <data key="d9">40</data>
+      <data key="d10">Forest Rd</data>
+      <data key="d11">secondary</data>
     </edge>
     <data key="d0">EPSG:4326</data>
     <data key="d1">True</data>

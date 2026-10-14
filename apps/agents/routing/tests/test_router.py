@@ -149,7 +149,7 @@ def test_bundled_graphml_fixture_loads_with_travel_times() -> None:
     graph = load_or_download_graph(fixture_path, (11.74, 11.70, 76.66, 76.62))
 
     assert graph.number_of_nodes() == 3
-    assert graph.number_of_edges() == 3
+    assert graph.number_of_edges() == 4
     assert all(data["travel_time"] > 0 for _, _, data in graph.edges(data=True))
 
 
