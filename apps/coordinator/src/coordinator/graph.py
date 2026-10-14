@@ -28,6 +28,7 @@ from wildfire_core.schemas.phase2 import (
     WeatherSnapshot,
 )
 
+from coordinator.audit import flush_audit_entries
 from coordinator.llm.groq_adapter import generate_rationale
 from coordinator.state import CoordinatorState
 
@@ -372,6 +373,10 @@ def assemble_plan(state: CoordinatorState) -> CoordinatorState:
     settings = _settings()
     plan_json = json.dumps(plan.model_dump(mode="json"), sort_keys=True)
     with _engine_for(settings.database_url.get_secret_value()).begin() as connection:
+        incident_origin = connection.execute(
+            text("SELECT origin::text FROM incidents WHERE id = :incident_id"),
+            {"incident_id": UUID(state["incident_id"])},
+        ).scalar_one()
         version = connection.execute(
             text(
                 "SELECT COALESCE(MAX(version), 0) + 1 FROM plan_versions "
@@ -383,18 +388,20 @@ def assemble_plan(state: CoordinatorState) -> CoordinatorState:
             text(
                 """
                 INSERT INTO plan_versions
-                    (incident_id, version, status, rationale_md, is_llm_fallback,
+                        (id, incident_id, version, status, rationale_md, is_llm_fallback,
                      is_simulated, warnings, plan_data)
                 VALUES
-                    (:incident_id, :version, 'draft', :rationale, :is_fallback,
-                     false, CAST(:warnings AS jsonb), CAST(:plan_data AS jsonb))
+                        (:plan_id, :incident_id, :version, 'draft', :rationale, :is_fallback,
+                     :is_simulated, CAST(:warnings AS jsonb), CAST(:plan_data AS jsonb))
                 """
             ),
             {
                 "incident_id": UUID(state["incident_id"]),
+                    "plan_id": UUID(plan.plan_id),
                 "version": version,
                 "rationale": plan.rationale_md,
                 "is_fallback": plan.is_llm_fallback,
+                "is_simulated": incident_origin in {"replay", "simulated"},
                 "warnings": json.dumps(list(plan.warnings)),
                 "plan_data": plan_json,
             },
@@ -425,37 +432,7 @@ def write_audit(state: CoordinatorState) -> CoordinatorState:
         started_ms,
     )
     if state["audit_entries"]:
-        rows = [
-            {
-                "id": UUID(entry["entry_id"]),
-                "incident_id": UUID(entry["incident_id"]),
-                "run_id": UUID(entry["run_id"]),
-                "node_name": entry["node_name"],
-                "agent_input": entry["inputs_json"],
-                "agent_output": entry["outputs_json"],
-                "latency_ms": entry["latency_ms"],
-                "model_metadata": json.dumps(entry["model_metadata"])
-                if entry.get("model_metadata") is not None
-                else None,
-                "created_at": entry["created_at"],
-            }
-            for entry in state["audit_entries"]
-        ]
         settings = _settings()
         with _engine_for(settings.database_url.get_secret_value()).begin() as connection:
-            connection.execute(
-                text(
-                    """
-                    INSERT INTO agent_runs
-                        (id, incident_id, agent, status, input, output, latency_ms,
-                         run_id, node_name, model_metadata, created_at)
-                    VALUES
-                        (:id, :incident_id, 'coordinator', 'succeeded',
-                         CAST(:agent_input AS jsonb), CAST(:agent_output AS jsonb), :latency_ms,
-                         :run_id, :node_name, CAST(:model_metadata AS jsonb), :created_at)
-                    ON CONFLICT (id) DO NOTHING
-                    """
-                ),
-                rows,
-            )
+            flush_audit_entries(state["audit_entries"], connection)
     return state
