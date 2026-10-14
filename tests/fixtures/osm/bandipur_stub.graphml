@@ -1,0 +1,57 @@
+<?xml version='1.0' encoding='utf-8'?>
+<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
+  <key id="d10" for="edge" attr.name="oneway" attr.type="string" />
+  <key id="d9" for="edge" attr.name="maxspeed" attr.type="string" />
+  <key id="d8" for="edge" attr.name="highway" attr.type="string" />
+  <key id="d7" for="edge" attr.name="length" attr.type="string" />
+  <key id="d6" for="edge" attr.name="osmid" attr.type="string" />
+  <key id="d5" for="node" attr.name="street_count" attr.type="string" />
+  <key id="d4" for="node" attr.name="osmid" attr.type="string" />
+  <key id="d3" for="node" attr.name="x" attr.type="string" />
+  <key id="d2" for="node" attr.name="y" attr.type="string" />
+  <key id="d1" for="graph" attr.name="simplified" attr.type="string" />
+  <key id="d0" for="graph" attr.name="crs" attr.type="string" />
+  <graph edgedefault="directed">
+    <node id="1000001">
+      <data key="d2">11.7</data>
+      <data key="d3">76.62</data>
+      <data key="d4">1000001</data>
+      <data key="d5">2</data>
+    </node>
+    <node id="1000002">
+      <data key="d2">11.72</data>
+      <data key="d3">76.64</data>
+      <data key="d4">1000002</data>
+      <data key="d5">2</data>
+    </node>
+    <node id="1000003">
+      <data key="d2">11.74</data>
+      <data key="d3">76.66</data>
+      <data key="d4">1000003</data>
+      <data key="d5">2</data>
+    </node>
+    <edge source="1000001" target="1000002" id="0">
+      <data key="d6">1</data>
+      <data key="d7">1000.0</data>
+      <data key="d8">residential</data>
+      <data key="d9">30</data>
+      <data key="d10">True</data>
+    </edge>
+    <edge source="1000001" target="1000002" id="1">
+      <data key="d6">3</data>
+      <data key="d7">1050.0</data>
+      <data key="d8">residential</data>
+      <data key="d9">30</data>
+      <data key="d10">True</data>
+    </edge>
+    <edge source="1000002" target="1000003" id="0">
+      <data key="d6">2</data>
+      <data key="d7">1200.0</data>
+      <data key="d8">residential</data>
+      <data key="d9">30</data>
+      <data key="d10">True</data>
+    </edge>
+    <data key="d0">EPSG:4326</data>
+    <data key="d1">True</data>
+  </graph>
+</graphml>

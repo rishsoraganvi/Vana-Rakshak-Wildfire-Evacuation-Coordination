@@ -100,6 +100,16 @@ def test_apply_fire_penalties_blocks_inside_current_perimeter() -> None:
     assert graph[1][2][7]["penalised_cost"] == 10.0
 
 
+def test_apply_fire_penalties_increases_cost_inside_p50_perimeter() -> None:
+    graph = make_graph()
+    p50_perimeter = "POLYGON ((0.4 -0.5, 0.6 -0.5, 0.6 0.5, 0.4 0.5, 0.4 -0.5))"
+
+    penalized_graph = apply_fire_penalties(graph, "POLYGON EMPTY", p50_perimeter)
+
+    assert penalized_graph[1][2][7]["penalised_cost"] == 50.0
+    assert penalized_graph[2][3][8]["penalised_cost"] == 10.0
+
+
 def test_apply_fire_penalties_safe_outside_perimeters() -> None:
     graph = make_graph()
 
@@ -125,6 +135,22 @@ def test_load_or_download_graph_uses_cache(tmp_path: Path, monkeypatch) -> None:
     result = load_or_download_graph(cache_path, (12.0, 11.0, 77.0, 76.0))
 
     assert result is graph
+
+
+def test_bundled_graphml_fixture_loads_with_travel_times() -> None:
+    fixture_path = (
+        Path(__file__).resolve().parents[4]
+        / "tests"
+        / "fixtures"
+        / "osm"
+        / "bandipur_stub.graphml"
+    )
+
+    graph = load_or_download_graph(fixture_path, (11.74, 11.70, 76.66, 76.62))
+
+    assert graph.number_of_nodes() == 3
+    assert graph.number_of_edges() == 3
+    assert all(data["travel_time"] > 0 for _, _, data in graph.edges(data=True))
 
 
 def test_load_or_download_graph_converts_bbox_and_saves_cache(tmp_path: Path, monkeypatch) -> None:
