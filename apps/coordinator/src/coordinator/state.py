@@ -1,0 +1,18 @@
+from __future__ import annotations
+
+from typing import Any, TypedDict
+
+
+class CoordinatorState(TypedDict):
+    incident_id: str
+    run_id: str
+    hotspot_ids: list[str]
+    weather_snapshot: dict[str, Any] | None
+    clusters: list[dict[str, Any]]
+    fire_result: dict[str, Any] | None
+    routes: list[dict[str, Any]]
+    rationale: str
+    is_llm_fallback: bool
+    audit_entries: list[dict[str, Any]]
+    warnings: list[str]
+    error: str | None
