@@ -7,6 +7,7 @@ from functools import lru_cache
 from typing import Any
 from uuid import UUID
 
+import networkx as nx
 from agent_fire.ensemble import compute_fire_spread
 from agent_routing import apply_fire_penalties, compute_route, load_or_download_graph, nearest_node
 from agent_weather.agent import get_weather_snapshot
@@ -38,6 +39,38 @@ def _engine_for(database_url: str) -> Engine:
 
 def _settings() -> Settings:
     return load_settings()
+
+
+def _aoi_boundary_exit_nodes(
+    graph: nx.MultiDiGraph[int, dict[str, Any], dict[str, Any]],
+    bbox: tuple[float, float, float, float],
+    current_perimeter: Any,
+) -> list[int]:
+    west, south, east, north = bbox
+    safe_nodes: list[tuple[int, float, float]] = []
+    for node_id, node_data in graph.nodes(data=True):
+        x = float(node_data["x"])
+        y = float(node_data["y"])
+        point = Point(x, y)
+        if not current_perimeter.is_empty and current_perimeter.contains(point):
+            continue
+        safe_nodes.append((node_id, x, y))
+
+    if not safe_nodes:
+        return []
+
+    edge_distance = (
+        lambda item: abs(item[1] - west),
+        lambda item: abs(east - item[1]),
+        lambda item: abs(item[2] - south),
+        lambda item: abs(north - item[2]),
+    )
+    exits: list[int] = []
+    for distance_to_edge in edge_distance:
+        node_id, _x, _y = min(safe_nodes, key=distance_to_edge)
+        if node_id not in exits:
+            exits.append(node_id)
+    return exits
 
 
 def _audit(
@@ -235,17 +268,20 @@ def compute_route_node(state: CoordinatorState) -> CoordinatorState:
             penalty_near=settings.route_fire_penalty_near,
         )
         current_perimeter = wkt.loads(fire_result.current_perimeter_wkt)
+        exit_nodes = _aoi_boundary_exit_nodes(
+            graph,
+            (bbox.west, bbox.south, bbox.east, bbox.north),
+            current_perimeter,
+        )
         for raw_cluster in state["clusters"]:
             cluster = HotspotCluster.model_validate(raw_cluster)
             origin_node = nearest_node(graph, cluster.centroid_lat, cluster.centroid_lon)
             origin_data = graph.nodes[origin_node]
             candidates: list[tuple[int, float]] = []
-            for node_id, node_data in weighted_graph.nodes(data=True):
+            for node_id in exit_nodes:
                 if node_id == origin_node:
                     continue
-                point = Point(float(node_data["x"]), float(node_data["y"]))
-                if not current_perimeter.is_empty and current_perimeter.contains(point):
-                    continue
+                node_data = weighted_graph.nodes[node_id]
                 distance = (float(node_data["x"]) - float(origin_data["x"])) ** 2 + (
                     float(node_data["y"]) - float(origin_data["y"])
                 ) ** 2
