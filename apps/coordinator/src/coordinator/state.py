@@ -7,6 +7,7 @@ class CoordinatorState(TypedDict):
     incident_id: str
     run_id: str
     hotspot_ids: list[str]
+    hotspots: list[dict[str, Any]]
     weather_snapshot: dict[str, Any] | None
     clusters: list[dict[str, Any]]
     fire_result: dict[str, Any] | None
