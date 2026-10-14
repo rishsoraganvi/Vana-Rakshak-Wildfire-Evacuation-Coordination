@@ -17,7 +17,7 @@
 ### Coordination and Planning
 
 - [ ] **PLAN-01**: Coordinator invokes Weather before Fire, then dispatches eligible specialists in parallel through typed tool contracts.
-- [ ] **PLAN-02**: MVP produces a basic evacuation route suggestion from Coordinator, Fire, Weather, and a pilot road graph.
+- [x] **PLAN-02**: MVP produces a basic evacuation route suggestion from Coordinator, Fire, Weather, and a pilot road graph.
 - [ ] **PLAN-03**: Phase 1 computes routes that account for blocked/unsafe edges, fire forecast penalties, and changing road conditions.
 - [ ] **PLAN-04**: Phase 1 matches evacuee groups to shelters without exceeding conservative usable capacity.
 - [ ] **PLAN-05**: Phase 2 proposes vehicle assignments without double-booking and marks all simulated entities.
@@ -36,11 +36,11 @@
 ### Platform and Experience
 
 - [ ] **PLAT-01**: API exposes authenticated role-based monitoring, incident, plan, review, resource, audit, health, and replay operations under `/api/v1`.
-- [ ] **PLAT-02**: Agent runs, tool calls, inputs, outputs, latency, model metadata, and user actions are stored in append-only audit records.
+- [x] **PLAT-02**: Agent runs, tool calls, inputs, outputs, latency, model metadata, and user actions are stored in append-only audit records.
 - [ ] **PLAT-03**: Dashboard provides a map-first overview, incident detail, plan review, validator strip, agent activity, freshness warnings, and simulation badges.
 - [ ] **PLAT-04**: System operates in degraded mode with cached data and deterministic planning when external providers or the LLM fail.
 - [ ] **PLAT-05**: Replay mode runs historical/scenario inputs through the same pipeline with a simulated clock.
-- [ ] **PLAT-06**: Fire, routing, matching, validators, contracts, review flow, and replay behavior have unit, property, integration, and end-to-end coverage appropriate to each phase.
+- [x] **PLAT-06**: Fire, routing, matching, validators, contracts, review flow, and replay behavior have unit, property, integration, and end-to-end coverage appropriate to each phase.
 - [ ] **PLAT-07**: System meets initial targets: plan P95 <= 5 minutes, re-plan <= 2 minutes, valid routes and capacities, zero approved capacity violations, and 100% approval records for dissemination.
 
 ## v2 Requirements
