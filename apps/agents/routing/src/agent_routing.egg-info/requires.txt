@@ -1,0 +1,4 @@
+networkx>=3.4
+osmnx>=2.0.0
+shapely>=2.0.0
+wildfire-core

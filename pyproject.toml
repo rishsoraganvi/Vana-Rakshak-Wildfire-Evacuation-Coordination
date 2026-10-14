@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Vana-Rakshak wildfire evacuation coordination foundation"
 requires-python = ">=3.11,<3.13"
 dependencies = [
+  "agent-routing",
   "alembic==1.20.0",
   "fastapi==0.142.2",
   "httpx==0.28.1",
@@ -31,16 +32,18 @@ members = [
   "apps/ingest_worker",
   "apps/agents/fire",
   "apps/agents/weather",
+  "apps/agents/routing",
 ]
 
 [tool.uv.sources]
+agent-routing = { workspace = true }
 wildfire-core = { workspace = true }
 
 [tool.uv]
 default-groups = ["dev"]
 
 [dependency-groups]
-dev = ["hypothesis==6.168.3", "types-pyyaml==6.0.12.20250915"]
+dev = ["hypothesis==6.168.3", "types-networkx", "types-pyyaml==6.0.12.20250915"]
 
 [tool.pytest.ini_options]
 markers = ["compose: requires the local Docker Compose services"]

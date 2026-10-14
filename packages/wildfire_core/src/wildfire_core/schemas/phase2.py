@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
-from typing import Any, Literal
+from typing import Any, Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class HotspotCluster(BaseModel):
@@ -77,13 +77,20 @@ class RouteResult(BaseModel):
 
     route_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     group_id: str
-    origin_settlement_id: str
+    origin_settlement_id: str | None = None
+    origin_cluster_id: str | None = None
     destination_shelter_id: str | None = None
     osm_node_path: tuple[int, ...] = Field(min_length=2)
     total_distance_m: float = Field(ge=0)
     estimated_travel_time_s: float = Field(ge=0)
     safety_classification: Literal["safe", "caution", "blocked"]
     fire_penalty_edges: tuple[int, ...] = ()
+
+    @model_validator(mode="after")
+    def validate_origin(self) -> Self:
+        if (self.origin_settlement_id is None) == (self.origin_cluster_id is None):
+            raise ValueError("exactly one of origin_settlement_id or origin_cluster_id is required")
+        return self
 
 
 class AuditEntry(BaseModel):
