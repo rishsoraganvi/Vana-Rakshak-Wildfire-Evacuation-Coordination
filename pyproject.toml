@@ -5,6 +5,7 @@ description = "Vana-Rakshak wildfire evacuation coordination foundation"
 requires-python = ">=3.11,<3.13"
 dependencies = [
   "agent-routing",
+  "coordinator",
   "alembic==1.20.0",
   "fastapi==0.142.2",
   "httpx==0.28.1",
@@ -33,10 +34,12 @@ members = [
   "apps/agents/fire",
   "apps/agents/weather",
   "apps/agents/routing",
+  "apps/coordinator",
 ]
 
 [tool.uv.sources]
 agent-routing = { workspace = true }
+coordinator = { workspace = true }
 wildfire-core = { workspace = true }
 
 [tool.uv]
