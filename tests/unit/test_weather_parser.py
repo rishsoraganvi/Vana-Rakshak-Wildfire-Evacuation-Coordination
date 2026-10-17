@@ -67,7 +67,8 @@ def test_parsed_live_observation_satisfies_scoped_weather_query() -> None:
     stmt = build_snapshot_query(
         11.72, 76.64, origin="live", provider="open-meteo", max_distance_km=50.0, now=now
     )
-    sql = str(stmt.compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}))
+    dialect = postgresql.dialect()  # type: ignore[no-untyped-call]
+    sql = str(stmt.compile(dialect=dialect, compile_kwargs={"literal_binds": True}))
     assert "is_forecast IS false" in sql
     assert "'live'" in sql
 

@@ -68,10 +68,10 @@ def test_trigger_debounce_and_shared_state_are_durable() -> None:
     detected_times = [detected_at, detected_at + timedelta(minutes=4)]
     try:
         first = record_new_hotspot_trigger(
-            engine, count=3, threshold=3, detected_at=detected_times[0]
+            engine, count=3, threshold=3, detected_at=detected_times[0], origin="replay"
         )
         second = record_new_hotspot_trigger(
-            engine, count=4, threshold=3, detected_at=detected_times[1]
+            engine, count=4, threshold=3, detected_at=detected_times[1], origin="replay"
         )
         assert first.crossed and second.crossed
         with engine.connect() as connection:

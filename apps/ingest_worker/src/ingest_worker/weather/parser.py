@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, get_args
 
 from wildfire_core.clock import Clock
-from wildfire_core.schemas.metadata import Freshness
+from wildfire_core.schemas.metadata import Freshness, Origin
 from wildfire_core.schemas.monitoring import WeatherObservation
 
-DATA_ORIGINS = frozenset({"live", "replay", "simulated", "manual"})
+DATA_ORIGINS = frozenset(get_args(Origin))
 
 
 def parse_open_meteo(
