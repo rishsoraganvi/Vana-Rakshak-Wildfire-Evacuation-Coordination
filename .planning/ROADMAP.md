@@ -64,7 +64,7 @@ Plans:
 - [x] 03-02-PLAN.md — Phase 3 contracts (IntegratedPlan, ValidationResult, ToolResult), shared horizon/footprint helpers, config block
 - [x] 03-03-PLAN.md — WR-03: live weather observations match the scoped query; incidents carry real origin
 - [x] 03-04-PLAN.md — Migration 0006, labelled synthetic seed + loaders, shelter registry and atomic occupancy
-- [ ] 03-05-PLAN.md — Routing: ETA-aware horizon costs, edge status, cost matrix, k=3 paths, BPR congestion, load-only graph + build script
+- [x] 03-05-PLAN.md — Routing: ETA-aware horizon costs, edge status, cost matrix, k=3 paths, BPR congestion, load-only graph + build script
 - [ ] 03-06-PLAN.md — Risk assessment (groups, rescue alerts, P90 warnings) and validators V1-V7 with properties
 - [ ] 03-07-PLAN.md — Finalize (S5 gate), strict V8 grounding + template, enum-only LLM fix menu, plan rationale
 - [ ] 03-08-PLAN.md — Versioned persistence: repository, advisory-locked versions, diff, state_version, ADR-002
