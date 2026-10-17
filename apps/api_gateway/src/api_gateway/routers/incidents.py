@@ -132,7 +132,7 @@ def create_incidents_router() -> APIRouter:
                    )), 0) AS hotspot_count,
                        (i.origin::text IN ('replay', 'simulated')) AS is_simulated
             FROM incidents i
-            WHERE (:status IS NULL OR i.status::text = :status)
+            WHERE (CAST(:status AS text) IS NULL OR i.status::text = CAST(:status AS text))
             ORDER BY i.opened_at DESC
             LIMIT :limit OFFSET :offset
             """

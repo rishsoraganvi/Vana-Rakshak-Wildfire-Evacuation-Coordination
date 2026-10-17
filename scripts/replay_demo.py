@@ -4,6 +4,7 @@ import json
 import os
 import sys
 import time
+import tomllib
 import traceback
 from datetime import UTC, datetime
 from pathlib import Path
@@ -14,6 +15,11 @@ from sqlalchemy import text
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE_PATH = ROOT / "tests" / "fixtures" / "osm" / "bandipur_stub.graphml"
+
+# Reuse pytest's source paths so the script runs outside pytest too.
+_PYPROJECT = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+for _src in _PYPROJECT["tool"]["pytest"]["ini_options"]["pythonpath"]:
+    sys.path.insert(0, str(ROOT / _src))
 
 
 def _seed_demo(engine, now: datetime) -> tuple[str, str]:

@@ -1,13 +1,21 @@
 from __future__ import annotations
 
+import os
 from logging.config import fileConfig
+from pathlib import Path
 
 from alembic import context
+from dotenv import load_dotenv
 from sqlalchemy import engine_from_config, pool
 
 config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
+
+# Prefer DATABASE_URL (env or repo .env) over the placeholder URL in alembic.ini.
+load_dotenv(Path(__file__).resolve().parents[2] / ".env")
+if database_url := os.getenv("DATABASE_URL"):
+    config.set_main_option("sqlalchemy.url", database_url.replace("%", "%%"))
 
 
 def run_migrations_offline() -> None:
