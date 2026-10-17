@@ -7,3 +7,6 @@ __pycache__/
 .mypy_cache/
 *.py[cod]
 *.egg-info/
+GUIDE.md
+data/
+cache/

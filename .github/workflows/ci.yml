@@ -17,8 +17,8 @@ jobs:
           python-version: "3.12"
       - run: uv sync --locked
       - run: uv run ruff check .
-      - run: uv run mypy packages/wildfire_core
-      - run: uv run pytest tests/unit -q
+      - run: uv run mypy packages/wildfire_core apps/agents/shelter/src/agent_shelter
+      - run: uv run pytest apps packages tests/unit -q
 
   compose-smoke:
     runs-on: ubuntu-latest
