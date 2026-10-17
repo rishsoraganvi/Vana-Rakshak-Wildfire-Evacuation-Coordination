@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 current_phase: 2
 status: ready_to_execute
-stopped_at: Completed 02-07-PLAN.md
+stopped_at: Completed 02-08-PLAN.md
 last_updated: "2026-10-17T06:00:00.000Z"
 state_head: e12e27b781bd3c9fee032fd185c14a36d253b72c
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 12
-  completed_plans: 10
+  completed_plans: 11
   percent: 21
 ---
 
@@ -30,7 +30,7 @@ Current Phase: 2
 - Current Plan: 3 of 3
 - Status: All plans complete; Phase 2 verification pending
 - Progress: 100% of Phase 2 (3/3 plans); 33% of milestone
-- Last activity: Plan 02-03 executed — read-only API, audit persistence, replay, and gated integration/smoke tests
+- Last activity: Plan 02-08 executed - loopback-only Postgres/Redis ports, required POSTGRES_PASSWORD, password-free config defaults (HI-06)
 
 ## Decisions and Constraints
 
@@ -57,6 +57,7 @@ Current Phase: 2
 - Safe road nodes nearest each AOI boundary are route exits because OSM data has no explicit exit tags.
 - Existing `agent_runs` is extended additively, with full CoordinatorPlan JSON stored in `plan_versions.plan_data`.
 - Trigger details retain exact hotspot IDs so Coordinator observations remain incident-scoped.
+- HI-06: compose publishes Postgres/Redis on 127.0.0.1 only and requires POSTGRES_PASSWORD; app config defaults carry no DB password (DATABASE_URL from env/.env supplies it).
 
 ## Next Action
 
