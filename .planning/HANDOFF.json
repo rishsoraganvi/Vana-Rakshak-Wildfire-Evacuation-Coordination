@@ -1,0 +1,130 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-10-17T15:44:57.359Z",
+  "phase": "03",
+  "phase_name": "capacity-aware-coordinated-planning",
+  "phase_dir": ".planning/phases/03-capacity-aware-coordinated-planning",
+  "plan": 12,
+  "task": 1,
+  "total_tasks": 3,
+  "status": "paused",
+  "completed_tasks": [
+    {
+      "id": "03-01",
+      "name": "agent-shelter package, min-cost-flow matching, CI target",
+      "status": "done",
+      "commit": "a4691f1"
+    },
+    {
+      "id": "03-02",
+      "name": "Phase 3 contracts, horizon/footprint helpers, config",
+      "status": "done",
+      "commit": "3ad7925"
+    },
+    {
+      "id": "03-03",
+      "name": "WR-03 weather observations + incident origin",
+      "status": "done",
+      "commit": "f705396"
+    },
+    {
+      "id": "03-04",
+      "name": "Migration 0006, synthetic seed, shelter registry",
+      "status": "done",
+      "commit": "3aa69c3"
+    },
+    {
+      "id": "03-05",
+      "name": "Routing horizon costs, k-paths, BPR, load-only graph",
+      "status": "done",
+      "commit": "967e633"
+    },
+    {
+      "id": "03-06",
+      "name": "Risk assessment + validators V1-V7",
+      "status": "done",
+      "commit": "c0d3796"
+    },
+    {
+      "id": "03-07",
+      "name": "finalize_plan, V8 grounding, LLM fix-menu chooser",
+      "status": "done",
+      "commit": "48791a0"
+    },
+    {
+      "id": "03-08",
+      "name": "Plan repository, versioning, diff, ADR-002",
+      "status": "done",
+      "commit": "1896055"
+    },
+    {
+      "id": "03-09",
+      "name": "Planning core: resolver + fallback planner",
+      "status": "done",
+      "commit": "99020b4"
+    },
+    {
+      "id": "03-10",
+      "name": "Ten-node coordinator, parallel dispatch, per-cluster weather",
+      "status": "done",
+      "commit": "e357d93"
+    },
+    {
+      "id": "03-11",
+      "name": "Re-plan triggers, debounce, API failed plans, demo/live updates",
+      "status": "done",
+      "commit": "d7104da"
+    }
+  ],
+  "remaining_tasks": [
+    {
+      "id": "api-rebuild",
+      "name": "Rebuild API image so 03-11 failed-plan endpoint is live: docker compose up -d --build --wait api",
+      "status": "not_started"
+    },
+    {
+      "id": "03-12",
+      "name": "Readiness probe + human-action: OSM build, curated seed CSVs",
+      "status": "not_started"
+    },
+    {
+      "id": "gates",
+      "name": "Rebuild API image, regression gate (live suite), code review, verifier, UAT, security",
+      "status": "not_started"
+    }
+  ],
+  "blockers": [],
+  "async_jobs": [],
+  "human_actions_pending": [
+    {
+      "action": "Run `uv run python scripts/build_osm_graph.py` to build the real pilot-area OSM graph (needs network)",
+      "context": "Plan 03-12 / D-19; CI uses synthetic fixture",
+      "blocking": false
+    },
+    {
+      "action": "Replace synthetic seed with curated config/seed/shelters_bandipur.csv and settlements_bandipur.csv",
+      "context": "Plan 03-12 / D-18",
+      "blocking": false
+    },
+    {
+      "action": "Change DATABASE_URL host in .env from localhost to 127.0.0.1",
+      "context": "Each raw DB connection otherwise waits ~200 s on IPv6",
+      "blocking": false
+    }
+  ],
+  "decisions": [
+    {
+      "decision": "Execution runs sequentially on main checkout with local commits, no push",
+      "rationale": "Worktree base-check degrades (local HEAD ahead of origin); user approved local commits",
+      "phase": "03"
+    },
+    {
+      "decision": "Executors never read .env, never run docker compose lifecycle, never download OSM",
+      "rationale": "User constraints / deny rules",
+      "phase": "03"
+    }
+  ],
+  "uncommitted_files": [],
+  "next_action": "Rebuild the API image (`docker compose up -d --build --wait api`) and check GET /api/v1/incidents/<id>/plan serves failed plans; then run plan 03-12 (readiness probe + human-action OSM build and curated seed).",
+  "context_notes": "Before each executor dispatch, refresh the isolation sentinel: `node ~/.claude/gsd-core/bin/gsd-tools.cjs query dispatch-isolation --raw --phase 03 --force-isolation none` (the hook treats it as stale after ~15 min). gsd-tools state.advance-plan errors on this STATE.md format; edit STATE.md directly. 16 pre-existing mypy errors in packages/wildfire_core/tests/test_phase2_schemas.py make CI's mypy step fail; fix during the regression gate. Offline suite is 481 passed / 1 skipped after 03-11; live tests green. Replay demo on the 3-node stub produces a failed plan (no road node near synthetic villages) - expected until the real OSM graph is built. Demo prints provider label 'anthropic/openai/gpt-oss-20b' (pre-existing metadata label bug)."
+}
