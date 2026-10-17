@@ -24,6 +24,10 @@ jobs:
     runs-on: ubuntu-latest
     env:
       POSTGRES_PASSWORD: ci-ephemeral-password
+      # Job-level so alembic (which honours DATABASE_URL) and pytest share it; 127.0.0.1
+      # because Postgres is published on IPv4 loopback only.
+      DATABASE_URL: postgresql+psycopg://wildfire:ci-ephemeral-password@127.0.0.1:5432/wildfire
+      REDIS_URL: redis://127.0.0.1:6379/0
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
@@ -38,7 +42,5 @@ jobs:
       - run: uv run pytest tests/integration -m compose -q
         env:
           COMPOSE_SMOKE: "1"
-          DATABASE_URL: postgresql+psycopg://wildfire:ci-ephemeral-password@localhost:5432/wildfire
-          REDIS_URL: redis://localhost:6379/0
       - if: always()
         run: docker compose down -v
