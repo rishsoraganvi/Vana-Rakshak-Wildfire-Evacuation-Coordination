@@ -16,8 +16,15 @@ P_BASE = 0.35
 STEP_DURATION_MIN = 6
 
 
-def _wind_factor(wind_speed_ms: float, wind_dir_deg: float, spread_dir_deg: float) -> float:
-    theta = math.radians(spread_dir_deg - wind_dir_deg)
+def _wind_factor(wind_speed_ms: float, wind_from_deg: float, spread_dir_deg: float) -> float:
+    """Relative spread weight toward ``spread_dir_deg`` (max 1.0 when straight downwind).
+
+    ``wind_from_deg`` is the meteorological FROM direction (Open-Meteo
+    ``wind_direction_10m``, degrees clockwise from north). Wind pushes fire toward
+    the reciprocal bearing (FROM + 180 mod 360).
+    """
+    downwind_deg = (wind_from_deg + 180.0) % 360.0
+    theta = math.radians(spread_dir_deg - downwind_deg)
     return float(math.exp(WIND_COEFF * wind_speed_ms * (math.cos(theta) - 1.0)))
 
 
@@ -25,7 +32,7 @@ def _moisture_factor(rh_pct: float, temperature_c: float) -> float:
     return float(max(0.05, 1.0 - MOISTURE_COEFF * (rh_pct - 20.0)))
 
 
-def _build_kernel(wind_speed_ms: float, wind_dir_deg: float) -> np.ndarray:
+def _build_kernel(wind_speed_ms: float, wind_from_deg: float) -> np.ndarray:
     kernel = np.zeros((3, 3), dtype=float)
     # Row 0 = North, Row 2 = South; Col 0 = West, Col 2 = East
     for r in range(3):
@@ -38,7 +45,7 @@ def _build_kernel(wind_speed_ms: float, wind_dir_deg: float) -> np.ndarray:
             d_lat = -dr
             d_lon = dc
             spread_dir = math.degrees(math.atan2(d_lon, d_lat)) % 360.0
-            kernel[r, c] = _wind_factor(wind_speed_ms, wind_dir_deg, spread_dir)
+            kernel[r, c] = _wind_factor(wind_speed_ms, wind_from_deg, spread_dir)
 
     total = np.sum(kernel)
     if total > 0:
@@ -49,14 +56,14 @@ def _build_kernel(wind_speed_ms: float, wind_dir_deg: float) -> np.ndarray:
 def _run_single(
     ignition_grid: np.ndarray,
     wind_speed_ms: float,
-    wind_dir_deg: float,
+    wind_from_deg: float,
     rh_pct: float,
     temperature_c: float,
     steps: int,
     seed: int,
 ) -> np.ndarray:
     rng = np.random.default_rng(seed)
-    kernel = _build_kernel(wind_speed_ms, wind_dir_deg)
+    kernel = _build_kernel(wind_speed_ms, wind_from_deg)
     moisture = _moisture_factor(rh_pct, temperature_c)
     grid = ignition_grid.copy().astype(float)
 
@@ -77,13 +84,19 @@ def run_ensemble(
     bbox_east: float,
     bbox_north: float,
     wind_speed_ms: float,
-    wind_dir_deg: float,
+    wind_from_deg: float,
     rh_pct: float,
     temperature_c: float,
     resolution_m: int = 250,
     seeds: Sequence[int] = (42, 43, 44),
     horizons_min: Sequence[int] = (60, 180, 360),
 ) -> dict[str, Any]:
+    """Run the CA ensemble.
+
+    ``wind_from_deg`` is the meteorological FROM direction (Open-Meteo
+    ``wind_direction_10m``, degrees clockwise from north); fire is pushed toward
+    the reciprocal bearing (FROM + 180 mod 360).
+    """
     cell_deg = resolution_m / 111_320.0
     n_rows = max(5, int(np.ceil((bbox_north - bbox_south) / cell_deg)))
     n_cols = max(5, int(np.ceil((bbox_east - bbox_west) / cell_deg)))
@@ -102,7 +115,7 @@ def run_ensemble(
         prev_h = 0
         for h in sorted_horizons:
             steps = max(1, (h - prev_h) // STEP_DURATION_MIN)
-            curr = _run_single(curr, wind_speed_ms, wind_dir_deg, rh_pct, temperature_c, steps, s)
+            curr = _run_single(curr, wind_speed_ms, wind_from_deg, rh_pct, temperature_c, steps, s)
             seed_grids[h][s] = curr.copy()
             prev_h = h
 
@@ -152,7 +165,7 @@ def run_ensemble(
         spread_direction_deg = float((az12 + 360.0) % 360.0)
         spread_rate_m_per_h = float(dist_m / 3.0)
     else:
-        spread_direction_deg = float(wind_dir_deg % 360.0)
+        spread_direction_deg = float(wind_from_deg % 360.0)
         spread_rate_m_per_h = 0.0
 
     target_grid = seed_grids.get(180, seed_grids[sorted_horizons[-1]])

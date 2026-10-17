@@ -15,6 +15,11 @@ def compute_fire_spread(
     resolution_m: int = 250,
     seeds: Sequence[int] = (42, 43, 44),
 ) -> FireSpreadResult:
+    """Run the CA ensemble for one cluster.
+
+    ``WeatherSnapshot.wind_dir_deg`` carries the meteorological FROM direction
+    (Open-Meteo ``wind_direction_10m``) and is passed to the CA as ``wind_from_deg``.
+    """
     if bbox is None:
         buffer_deg = 0.1
         b_west = cluster.bbox_west - buffer_deg
@@ -46,7 +51,7 @@ def compute_fire_spread(
         bbox_east=b_east,
         bbox_north=b_north,
         wind_speed_ms=weather.wind_speed_ms,
-        wind_dir_deg=weather.wind_dir_deg,
+        wind_from_deg=weather.wind_dir_deg,
         rh_pct=weather.rh_pct,
         temperature_c=weather.temperature_c,
         resolution_m=resolution_m,
