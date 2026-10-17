@@ -70,7 +70,7 @@ Plans:
 - [x] 03-08-PLAN.md — Versioned persistence: repository, advisory-locked versions, diff, state_version, ADR-002
 - [x] 03-09-PLAN.md — Planning core: capacity-aware assignment with BPR passes, bounded resolver, fallback planner, invariants
 - [x] 03-10-PLAN.md — Coordinator rewiring: parallel dispatch, per-cluster weather (WR-01), persistence, audit on failure
-- [ ] 03-11-PLAN.md — Re-plan triggers, debounce, on-demand entry, API failed-plan visibility, demo/live test updates
+- [x] 03-11-PLAN.md — Re-plan triggers, debounce, on-demand entry, API failed-plan visibility, demo/live test updates
 - [ ] 03-12-PLAN.md — Real-data handoff: readiness probe, OSM build and curated seed checkpoints
 
 ## Phase 4: Human Review and Dissemination Safety
