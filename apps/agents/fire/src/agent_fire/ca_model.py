@@ -76,6 +76,61 @@ def _run_single(
     return grid.astype(int)
 
 
+def _spread_metrics(
+    ignition_mask: np.ndarray,
+    p50_mask: np.ndarray,
+    *,
+    bbox_north: float,
+    bbox_west: float,
+    cell_deg: float,
+    resolution_m: float,
+    horizon_min: float,
+) -> tuple[float | None, float]:
+    """Front-advance spread metrics measured from the snapped ignition block.
+
+    Returns ``(direction_deg, rate_m_per_h)``. Direction is the bearing from the
+    ignition-block centre to the mean P50 cell centre, or None when the P50 mask is
+    empty or that shift is below one grid cell. Rate is the P50 front advance (max
+    P50 distance minus max ignition distance from the reference) per hour of the
+    real horizon.
+    """
+    p50_rows, p50_cols = np.where(p50_mask > 0)
+    if len(p50_rows) == 0:
+        return None, 0.0
+    ign_rows, ign_cols = np.where(ignition_mask > 0)
+
+    def centres(rows: np.ndarray, cols: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        lats = bbox_north - (rows + 0.5) * cell_deg
+        lons = bbox_west + (cols + 0.5) * cell_deg
+        return lons.astype(float), lats.astype(float)
+
+    ign_lons, ign_lats = centres(ign_rows, ign_cols)
+    p50_lons, p50_lats = centres(p50_rows, p50_cols)
+    ref_lon = float(np.mean(ign_lons))
+    ref_lat = float(np.mean(ign_lats))
+    geod = pyproj.Geod(ellps="WGS84")
+
+    def distances(lons: np.ndarray, lats: np.ndarray) -> np.ndarray:
+        _, _, dist = geod.inv(
+            np.full(lons.shape, ref_lon), np.full(lats.shape, ref_lat), lons, lats
+        )
+        return np.asarray(dist, dtype=float)
+
+    advance_m = max(
+        0.0,
+        float(np.max(distances(p50_lons, p50_lats)))
+        - float(np.max(distances(ign_lons, ign_lats))),
+    )
+    rate = advance_m / (horizon_min / 60.0)
+
+    az, _, shift_m = geod.inv(
+        ref_lon, ref_lat, float(np.mean(p50_lons)), float(np.mean(p50_lats))
+    )
+    if shift_m < resolution_m:
+        return None, rate
+    return float((az + 360.0) % 360.0), rate
+
+
 def run_ensemble(
     centroid_lat: float,
     centroid_lon: float,
@@ -151,24 +206,21 @@ def run_ensemble(
         p90_wkts[h] = grid_to_wkt(p90_m)
 
     cell_area_km2 = (resolution_m / 1000.0) ** 2
-    h3_p50 = p50_masks.get(180, p50_masks[sorted_horizons[-1]])
+    metric_h = 180 if 180 in sorted_horizons else sorted_horizons[-1]
+    h3_p50 = p50_masks[metric_h]
     affected_area_km2 = float(np.sum(h3_p50) * cell_area_km2)
 
-    p50_rows, p50_cols = np.where(h3_p50 > 0)
-    if len(p50_rows) > 0:
-        mean_r = float(np.mean(p50_rows))
-        mean_c = float(np.mean(p50_cols))
-        end_lat = bbox_north - (mean_r + 0.5) * cell_deg
-        end_lon = bbox_west + (mean_c + 0.5) * cell_deg
-        geod = pyproj.Geod(ellps="WGS84")
-        az12, _, dist_m = geod.inv(centroid_lon, centroid_lat, end_lon, end_lat)
-        spread_direction_deg = float((az12 + 360.0) % 360.0)
-        spread_rate_m_per_h = float(dist_m / 3.0)
-    else:
-        spread_direction_deg = float(wind_from_deg % 360.0)
-        spread_rate_m_per_h = 0.0
+    spread_direction_deg, spread_rate_m_per_h = _spread_metrics(
+        ignition,
+        h3_p50,
+        bbox_north=bbox_north,
+        bbox_west=bbox_west,
+        cell_deg=cell_deg,
+        resolution_m=resolution_m,
+        horizon_min=metric_h,
+    )
 
-    target_grid = seed_grids.get(180, seed_grids[sorted_horizons[-1]])
+    target_grid = seed_grids[metric_h]
     burn_counts = [float(np.sum(target_grid[s])) for s in seeds]
     mean_count = float(np.mean(burn_counts))
     std_count = float(np.std(burn_counts))
@@ -189,7 +241,9 @@ def run_ensemble(
         "p90_3h_wkt": p90_wkts.get(180, "POLYGON EMPTY"),
         "p90_6h_wkt": p90_wkts.get(360, "POLYGON EMPTY"),
         "affected_area_km2": round(affected_area_km2, 4),
-        "spread_direction_deg": round(spread_direction_deg, 2),
+        "spread_direction_deg": (
+            None if spread_direction_deg is None else round(spread_direction_deg, 2)
+        ),
         "spread_rate_m_per_h": round(spread_rate_m_per_h, 2),
         "confidence": confidence,
         "seeds_used": tuple(seeds),

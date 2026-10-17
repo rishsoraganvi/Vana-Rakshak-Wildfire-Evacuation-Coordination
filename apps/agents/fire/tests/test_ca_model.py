@@ -1,14 +1,18 @@
 from datetime import UTC, datetime
 from typing import Any
 
+import numpy as np
+import pytest
 from agent_fire.ca_model import (
     _moisture_factor,
+    _spread_metrics,
     _wind_factor,
     run_ensemble,
 )
 from agent_fire.ensemble import compute_fire_spread
+from pydantic import ValidationError
 from shapely import wkt as shapely_wkt
-from wildfire_core.schemas.phase2 import HotspotCluster, WeatherSnapshot
+from wildfire_core.schemas.phase2 import FireSpreadResult, HotspotCluster, WeatherSnapshot
 
 
 def test_wind_factor_uses_meteorological_from_direction():
@@ -152,3 +156,102 @@ def test_compute_fire_spread_passes_from_direction():
 
     assert result.spread_direction_deg is not None
     assert 45.0 < result.spread_direction_deg < 135.0
+
+
+CELL_DEG_250 = 250 / 111_320.0
+
+
+def _blocks(p50_cols: range, p50_rows: range = range(9, 12)) -> tuple[np.ndarray, np.ndarray]:
+    ignition = np.zeros((21, 21), dtype=int)
+    ignition[9:12, 9:12] = 1
+    p50 = ignition.copy()
+    for r in p50_rows:
+        for c in p50_cols:
+            p50[r, c] = 1
+    return ignition, p50
+
+
+def _metrics(ignition: np.ndarray, p50: np.ndarray, horizon_min: int) -> tuple[float | None, float]:
+    return _spread_metrics(
+        ignition,
+        p50,
+        bbox_north=11.80,
+        bbox_west=76.55,
+        cell_deg=CELL_DEG_250,
+        resolution_m=250,
+        horizon_min=horizon_min,
+    )
+
+
+def test_spread_metrics_east_only_advance():
+    ignition, p50 = _blocks(range(12, 16))
+    direction, rate = _metrics(ignition, p50, 60)
+
+    assert direction is not None
+    assert 80.0 < direction < 100.0
+    assert 800.0 < rate < 1000.0
+
+    _, rate_2h = _metrics(ignition, p50, 120)
+    assert rate_2h == pytest.approx(rate / 2.0, rel=1e-9)
+
+
+def test_spread_metrics_symmetric_growth_has_no_direction():
+    ignition = np.zeros((21, 21), dtype=int)
+    ignition[9:12, 9:12] = 1
+    p50 = np.zeros((21, 21), dtype=int)
+    p50[7:14, 7:14] = 1
+    direction, rate = _metrics(ignition, p50, 60)
+
+    assert direction is None
+    assert rate > 0.0
+
+
+def test_spread_metrics_empty_p50():
+    ignition = np.zeros((21, 21), dtype=int)
+    ignition[9:12, 9:12] = 1
+    assert _metrics(ignition, np.zeros((21, 21), dtype=int), 60) == (None, 0.0)
+
+
+def test_spread_metrics_ignore_raw_centroid_snapping():
+    kwargs = _wind_kwargs(0.0)
+    kwargs["wind_speed_ms"] = 0.0
+    cell_deg = 500 / 111_320.0
+    lat_a, lat_b = 11.72, 11.719
+    assert round((11.80 - lat_a) / cell_deg) == round((11.80 - lat_b) / cell_deg)
+
+    res_a = run_ensemble(**{**kwargs, "centroid_lat": lat_a})
+    res_b = run_ensemble(**{**kwargs, "centroid_lat": lat_b})
+
+    assert res_a["spread_direction_deg"] == res_b["spread_direction_deg"]
+    assert res_a["spread_rate_m_per_h"] == res_b["spread_rate_m_per_h"]
+
+
+def test_spread_metrics_use_actual_horizon():
+    res = run_ensemble(**_wind_kwargs(270.0), horizons_min=(60, 120))
+
+    assert res["p50_3h_wkt"] == "POLYGON EMPTY"
+    assert res["spread_rate_m_per_h"] > 0.0
+    # Front advance over 120 min, not 180 min: rate stays physically plausible
+    # (cannot exceed the CA ceiling of one cell per 6-minute step = 500 m / 0.1 h).
+    assert res["spread_rate_m_per_h"] <= 5000.0
+
+
+def test_fire_spread_result_accepts_null_direction():
+    base: dict[str, Any] = dict(
+        cluster_id="c1",
+        current_perimeter_wkt="POLYGON EMPTY",
+        p50_1h_wkt="POLYGON EMPTY",
+        p50_3h_wkt="POLYGON EMPTY",
+        p50_6h_wkt="POLYGON EMPTY",
+        p90_1h_wkt="POLYGON EMPTY",
+        p90_3h_wkt="POLYGON EMPTY",
+        p90_6h_wkt="POLYGON EMPTY",
+        affected_area_km2=0.0,
+        spread_rate_m_per_h=0.0,
+        confidence="low",
+    )
+    assert FireSpreadResult(spread_direction_deg=None, **base).spread_direction_deg is None
+    with pytest.raises(ValidationError):
+        FireSpreadResult(spread_direction_deg=361.0, **base)
+    with pytest.raises(ValidationError):
+        FireSpreadResult(**base)

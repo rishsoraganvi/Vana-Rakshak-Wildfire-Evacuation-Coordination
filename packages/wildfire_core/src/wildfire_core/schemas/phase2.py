@@ -66,7 +66,14 @@ class FireSpreadResult(BaseModel):
     p90_3h_wkt: str
     p90_6h_wkt: str
     affected_area_km2: float = Field(ge=0)
-    spread_direction_deg: float = Field(ge=0, le=360)
+    spread_direction_deg: float | None = Field(
+        ge=0,
+        le=360,
+        description=(
+            "Bearing of P50 front movement; "
+            "None when the P50 centroid shift is below one grid cell"
+        ),
+    )
     spread_rate_m_per_h: float = Field(ge=0)
     confidence: Literal["low", "medium", "high"]
     settlements_at_risk: tuple[SettlementRisk2, ...] = ()
