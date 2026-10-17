@@ -7,8 +7,10 @@ dependencies = [
   "pydantic==2.13.5",
   "pydantic-settings==2.15.0",
   "psycopg[binary]==3.3.6",
+  "pyproj>=3.6.0",
   "pyyaml==6.0.3",
   "redis==8.1.0",
+  "shapely>=2.0.0",
   "sqlalchemy==2.0.54",
 ]
 

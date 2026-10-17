@@ -34,11 +34,13 @@ members = [
   "apps/agents/fire",
   "apps/agents/weather",
   "apps/agents/routing",
+  "apps/agents/shelter",
   "apps/coordinator",
 ]
 
 [tool.uv.sources]
 agent-routing = { workspace = true }
+agent-shelter = { workspace = true }
 coordinator = { workspace = true }
 wildfire-core = { workspace = true }
 
@@ -55,12 +57,14 @@ markers = [
   "smoke: full Compose stack tests",
 ]
 pythonpath = [
+  ".",
   "packages/wildfire_core/src",
   "apps/api_gateway/src",
   "apps/coordinator/src",
   "apps/ingest_worker/src",
   "apps/agents/fire/src",
   "apps/agents/routing/src",
+  "apps/agents/shelter/src",
   "apps/agents/weather/src",
 ]
 
@@ -77,6 +81,7 @@ strict = true
 mypy_path = [
   "packages/wildfire_core/src",
   "apps/agents/fire/src",
+  "apps/agents/shelter/src",
   "apps/agents/weather/src",
   "apps/ingest_worker/src",
 ]
