@@ -22,6 +22,8 @@ jobs:
 
   compose-smoke:
     runs-on: ubuntu-latest
+    env:
+      POSTGRES_PASSWORD: ci-ephemeral-password
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
@@ -36,7 +38,7 @@ jobs:
       - run: uv run pytest tests/integration -m compose -q
         env:
           COMPOSE_SMOKE: "1"
-          DATABASE_URL: postgresql+psycopg://wildfire:change_me@localhost:5432/wildfire
+          DATABASE_URL: postgresql+psycopg://wildfire:ci-ephemeral-password@localhost:5432/wildfire
           REDIS_URL: redis://localhost:6379/0
       - if: always()
         run: docker compose down -v
