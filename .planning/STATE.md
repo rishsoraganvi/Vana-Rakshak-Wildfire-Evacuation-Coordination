@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 current_phase: 2
 status: ready_to_execute
-stopped_at: Completed 02-05-PLAN.md
+stopped_at: Completed 02-06-PLAN.md
 last_updated: "2026-10-17T04:41:59.456Z"
 state_head: e12e27b781bd3c9fee032fd185c14a36d253b72c
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 12
-  completed_plans: 8
-  percent: 19
+  completed_plans: 9
+  percent: 21
 ---
 
 # Project State
@@ -68,7 +68,7 @@ Run Phase 2 verification (`02-VERIFICATION.md` is not yet present).
 ## Session
 
 **Last session:** 2026-10-17T04:41:59.138Z
-**Stopped at:** Completed 02-05-PLAN.md
+**Stopped at:** Completed 02-06-PLAN.md
 **Resume file:** None
 
 ## Performance Metrics
@@ -79,8 +79,10 @@ Run Phase 2 verification (`02-VERIFICATION.md` is not yet present).
 | Phase 02 P03 | 22 min | 8 tasks | 13 files |
 | Phase 02 P04 | 25min | 2 tasks | 4 files |
 | Phase 02 P05 | 20min | 2 tasks | 4 files |
+| Phase 02 P06 | 45min | 3 tasks | 11 files |
 
 ## Decisions
 
 - [Phase 2]: 02-04: CA wind_from_deg is meteorological FROM; spread_direction_deg is None when P50 shift < 1 cell; metrics use front advance over real horizon
 - [Phase 2]: 02-05: fire exposure tested on full edge geometry (intersects); compute_route searches unblocked first then least-blocked (1e6 x travel_time); inf still means blocked (D-06)
+- [Phase 2]: 02-06: generate_rationale audit rows carry model_metadata (JSON text at flush); Groq called only when llm_enabled + provider groq + model + key; default model openai/gpt-oss-20b (config); blank env vars treated as unset; Groq prompt carries compact metrics (no WKT) to stay under on-demand TPM

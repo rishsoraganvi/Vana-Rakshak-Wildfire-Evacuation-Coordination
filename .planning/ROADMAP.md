@@ -32,7 +32,7 @@ Plans:
 
 **Exit criteria:** end-to-end replay passes with mocked LLM; output contains P50/P90 forecast data and route; audit entries cover every node/tool call; fallback works with LLM disabled; core tests pass.
 
-**Plans:** 4/9 plans executed (6 gap-closure plans pending)
+**Plans:** 5/9 plans executed (4 gap-closure plans pending)
 
 Plans:
 
@@ -41,7 +41,7 @@ Plans:
 - [x] 02-03-PLAN.md — Read-Only API, Audit Persistence, Replay Script, Full Test Suite
 - [x] 02-04-PLAN.md — (gap) Fire CA downwind convention and real spread metrics (CR-01, HI-02)
 - [x] 02-05-PLAN.md — (gap) Full-edge fire exposure and rankable blocked routes (CR-02, HI-01)
-- [ ] 02-06-PLAN.md — (gap) Audit model_metadata, LLM gating, configurable model (PLAT-02, HI-05, MD-11)
+- [x] 02-06-PLAN.md — (gap) Audit model_metadata, LLM gating, configurable model (PLAT-02, HI-05, MD-11)
 - [ ] 02-07-PLAN.md — (gap) Every cluster simulated, routes start outside fire (CR-03, HI-01)
 - [ ] 02-08-PLAN.md — (gap) Loopback-only Postgres/Redis, required password (HI-06)
 - [ ] 02-09-PLAN.md — (gap) Scoped weather lookup, no fabricated weather (HI-03, HI-04)
