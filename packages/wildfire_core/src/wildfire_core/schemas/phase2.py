@@ -32,6 +32,7 @@ class WeatherSnapshot(BaseModel):
     temperature_c: float
     is_stale: bool = False
     stale_age_min: int | None = None
+    age_min: int | None = Field(default=None, ge=0)
 
 
 class SettlementRisk2(BaseModel):
@@ -107,6 +108,15 @@ class AuditEntry(BaseModel):
     incident_id: str
     run_id: str
     node_name: str
+    agent: Literal[
+        "coordinator",
+        "fire",
+        "weather",
+        "traffic_routing",
+        "shelter",
+        "emergency_vehicle",
+        "drone_observation",
+    ] = "coordinator"
     inputs_json: str
     outputs_json: str
     latency_ms: int = Field(ge=0)

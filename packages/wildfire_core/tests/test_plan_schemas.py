@@ -190,7 +190,7 @@ def test_freshness_and_provenance_are_required(missing: str) -> None:
 def test_plan_is_frozen_and_forbids_extras() -> None:
     plan = _plan()
     with pytest.raises(ValidationError):
-        plan.status = "failed"  # type: ignore[misc]
+        plan.status = "failed"
     with pytest.raises(ValidationError):
         _plan(surprise=1)
 
@@ -316,7 +316,7 @@ def test_audit_entry_agent_default_and_enum() -> None:
     assert AuditEntry(**base).agent == "coordinator"
     assert AuditEntry(**base, agent="traffic_routing").agent == "traffic_routing"
     with pytest.raises(ValidationError):
-        AuditEntry(**base, agent="nonsense")
+        AuditEntry(**{**base, "agent": "nonsense"})
 
 
 def test_plan_draft_invariants() -> None:
