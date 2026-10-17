@@ -7,7 +7,7 @@ from .congestion import (
     parse_tag,
 )
 from .costs import apply_fire_penalties, apply_horizon_costs, edge_geometry, refresh_horizon_costs
-from .graph import load_or_download_graph
+from .graph import GraphNotBuiltError, build_graph_for_area, load_graph, load_or_download_graph
 from .k_paths import KPaths, collapse_to_digraph, k_shortest_paths
 from .router import (
     LegCost,
@@ -22,6 +22,7 @@ from .router import (
 )
 
 __all__ = [
+    "GraphNotBuiltError",
     "KPaths",
     "LegCost",
     "PathEvaluation",
@@ -29,6 +30,7 @@ __all__ = [
     "apply_fire_penalties",
     "apply_horizon_costs",
     "bpr_time",
+    "build_graph_for_area",
     "build_route_edges",
     "collapse_to_digraph",
     "compute_route",
@@ -37,6 +39,7 @@ __all__ = [
     "edge_geometry",
     "evaluate_path",
     "k_shortest_paths",
+    "load_graph",
     "load_or_download_graph",
     "msa_blend",
     "nearest_node",

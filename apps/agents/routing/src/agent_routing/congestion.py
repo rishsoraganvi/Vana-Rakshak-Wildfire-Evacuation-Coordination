@@ -89,7 +89,7 @@ def bpr_time(
     """Bureau of Public Roads link travel time in seconds."""
     if capacity_vph <= 0:
         raise ValueError(f"capacity_vph must be positive, got {capacity_vph!r}")
-    return t0_s * (1.0 + alpha * (flow_vph / capacity_vph) ** beta)
+    return t0_s * (1.0 + alpha * math.pow(flow_vph / capacity_vph, beta))
 
 
 def edge_flows_vph(
