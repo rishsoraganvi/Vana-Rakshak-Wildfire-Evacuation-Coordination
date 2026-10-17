@@ -1,5 +1,6 @@
 import json
 from datetime import UTC, datetime
+from pathlib import Path
 from types import SimpleNamespace
 
 from coordinator.llm import groq_adapter
@@ -147,3 +148,123 @@ def test_generate_rationale_falls_back_on_empty_response(monkeypatch) -> None:
 
     assert result.is_fallback is True
     assert "LLM error: ValueError" in result.text
+
+
+def _forbid_groq(monkeypatch) -> list[int]:
+    sleep_calls: list[int] = []
+
+    class ForbiddenGroq:
+        def __init__(self, *_args, **_kwargs) -> None:
+            raise AssertionError("Groq client must not be constructed")
+
+    monkeypatch.setattr(groq_adapter, "Groq", ForbiddenGroq)
+    monkeypatch.setattr(groq_adapter.time, "sleep", sleep_calls.append)
+    return sleep_calls
+
+
+def test_generate_rationale_skips_provider_when_disabled(monkeypatch) -> None:
+    fire_result, weather, routes = make_inputs()
+    sleep_calls = _forbid_groq(monkeypatch)
+
+    result = groq_adapter.generate_rationale(
+        [fire_result], weather, routes, llm_settings(llm_enabled=False)
+    )
+
+    assert result.is_fallback is True
+    assert result.model_metadata["fallback_reason"] == "llm_disabled"
+    assert result.model_metadata["llm_called"] is False
+    assert "LLM unavailable: llm_disabled" in result.text
+    assert sleep_calls == []
+
+
+def test_generate_rationale_requires_groq_provider(monkeypatch) -> None:
+    fire_result, weather, routes = make_inputs()
+    sleep_calls = _forbid_groq(monkeypatch)
+
+    result = groq_adapter.generate_rationale(
+        [fire_result], weather, routes, llm_settings(llm_provider="anthropic")
+    )
+
+    assert result.model_metadata["fallback_reason"] == "provider_not_groq"
+    assert result.model_metadata["llm_called"] is False
+    assert sleep_calls == []
+
+
+def test_generate_rationale_requires_model(monkeypatch) -> None:
+    fire_result, weather, routes = make_inputs()
+    sleep_calls = _forbid_groq(monkeypatch)
+
+    result = groq_adapter.generate_rationale(
+        [fire_result], weather, routes, llm_settings(llm_model="")
+    )
+
+    assert result.model_metadata["fallback_reason"] == "model_not_configured"
+    assert sleep_calls == []
+
+
+def test_generate_rationale_requires_api_key(monkeypatch) -> None:
+    fire_result, weather, routes = make_inputs()
+    sleep_calls = _forbid_groq(monkeypatch)
+
+    result = groq_adapter.generate_rationale(
+        [fire_result], weather, routes, llm_settings(groq_api_key=SecretStr(""))
+    )
+
+    assert result.model_metadata["fallback_reason"] == "api_key_missing"
+    assert result.is_fallback is True
+    assert sleep_calls == []
+
+
+def _capturing_groq(monkeypatch) -> list[dict[str, object]]:
+    requests: list[dict[str, object]] = []
+
+    class CapturingGroq:
+        def __init__(self, api_key: str) -> None:
+            self.chat = SimpleNamespace(
+                completions=SimpleNamespace(
+                    create=lambda **kwargs: requests.append(kwargs)
+                    or SimpleNamespace(
+                        choices=[SimpleNamespace(message=SimpleNamespace(content="ok"))]
+                    )
+                )
+            )
+
+    monkeypatch.setattr(groq_adapter, "Groq", CapturingGroq)
+    monkeypatch.setattr(groq_adapter.time, "sleep", lambda _seconds: None)
+    return requests
+
+
+def test_generate_rationale_gpt_oss_reasoning_params(monkeypatch) -> None:
+    fire_result, weather, routes = make_inputs()
+    requests = _capturing_groq(monkeypatch)
+    settings = llm_settings(llm_model="openai/gpt-oss-20b")
+
+    result = groq_adapter.generate_rationale([fire_result], weather, routes, settings)
+
+    assert requests[0]["reasoning_effort"] == "low"
+    assert requests[0]["include_reasoning"] is False
+    assert requests[0]["max_completion_tokens"] == settings.llm_rationale_max_tokens
+    assert "max_tokens" not in requests[0]
+    assert result.model_metadata["reasoning_effort"] == "low"
+
+
+def test_generate_rationale_plain_model_has_no_reasoning_params(monkeypatch) -> None:
+    fire_result, weather, routes = make_inputs()
+    requests = _capturing_groq(monkeypatch)
+
+    result = groq_adapter.generate_rationale([fire_result], weather, routes, llm_settings())
+
+    assert "reasoning_effort" not in requests[0]
+    assert "include_reasoning" not in requests[0]
+    assert result.model_metadata["reasoning_effort"] is None
+
+
+def test_default_llm_config_from_defaults_yaml(monkeypatch) -> None:
+    for name in ("LLM_ENABLED", "LLM_PROVIDER", "LLM_MODEL"):
+        monkeypatch.delenv(name, raising=False)
+
+    settings = load_settings(Path("config/defaults.yaml"))
+
+    assert settings.llm_provider == "groq"
+    assert settings.llm_model == "openai/gpt-oss-20b"
+    assert settings.llm_enabled is False
