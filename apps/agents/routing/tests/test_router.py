@@ -7,6 +7,7 @@ import pytest
 from agent_routing import (
     apply_fire_penalties,
     compute_route,
+    load_graph,
     load_or_download_graph,
     nearest_node,
     nearest_node_outside,
@@ -175,7 +176,7 @@ def test_bundled_fixture_route_through_active_fire_is_not_safe() -> None:
         / "osm"
         / "bandipur_stub.graphml"
     )
-    graph = load_or_download_graph(fixture_path, (11.74, 11.70, 76.66, 76.62))
+    graph = load_graph(fixture_path)
     perimeter = _square(76.6366313, 11.7166313, 76.6433687, 11.7233687)
 
     penalized = apply_fire_penalties(graph, perimeter, "POLYGON EMPTY")
@@ -192,7 +193,7 @@ def test_bundled_fixture_route_through_active_fire_is_not_safe() -> None:
     assert route.fire_penalty_edges
 
 
-def test_load_or_download_graph_uses_cache(tmp_path: Path, monkeypatch) -> None:
+def test_load_graph_uses_cache_and_never_downloads(tmp_path: Path, monkeypatch) -> None:
     cache_path = tmp_path / "cached.graphml"
     cache_path.write_text("cached", encoding="utf-8")
     graph = make_graph()
@@ -205,7 +206,7 @@ def test_load_or_download_graph_uses_cache(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(ox, "add_edge_speeds", lambda cached_graph: cached_graph)
     monkeypatch.setattr(ox, "add_edge_travel_times", lambda cached_graph: cached_graph)
 
-    result = load_or_download_graph(cache_path, (12.0, 11.0, 77.0, 76.0))
+    result = load_graph(cache_path)
 
     assert result is graph
 
@@ -219,42 +220,26 @@ def test_bundled_graphml_fixture_loads_with_travel_times() -> None:
         / "bandipur_stub.graphml"
     )
 
-    graph = load_or_download_graph(fixture_path, (11.74, 11.70, 76.66, 76.62))
+    graph = load_graph(fixture_path)
 
     assert graph.number_of_nodes() == 3
     assert graph.number_of_edges() == 4
     assert all(data["travel_time"] > 0 for _, _, data in graph.edges(data=True))
 
 
-def test_load_or_download_graph_converts_bbox_and_saves_cache(tmp_path: Path, monkeypatch) -> None:
+def test_load_or_download_graph_wrapper_never_downloads(tmp_path: Path, monkeypatch) -> None:
     cache_path = tmp_path / "nested" / "road.graphml"
-    graph = make_graph()
-    calls: dict[str, object] = {}
+    monkeypatch.setattr(
+        ox,
+        "graph_from_bbox",
+        lambda *_args, **_kwargs: pytest.fail("unexpected download"),
+    )
 
-    def graph_from_bbox(
-        bbox: tuple[float, float, float, float], network_type: str
-    ) -> nx.MultiDiGraph:
-        calls["bbox"] = bbox
-        calls["network_type"] = network_type
-        return graph
+    with pytest.raises(FileNotFoundError, match="build_osm_graph.py"):
+        load_or_download_graph(cache_path, (12.0, 11.0, 77.0, 76.0), "drive")
 
-    def save_graphml(saved_graph: nx.MultiDiGraph, filepath: Path) -> None:
-        calls["saved_graph"] = saved_graph
-        calls["filepath"] = filepath
-        filepath.write_text("cached", encoding="utf-8")
-
-    monkeypatch.setattr(ox, "graph_from_bbox", graph_from_bbox)
-    monkeypatch.setattr(ox, "save_graphml", save_graphml)
-    monkeypatch.setattr(ox, "add_edge_speeds", lambda cached_graph: cached_graph)
-    monkeypatch.setattr(ox, "add_edge_travel_times", lambda cached_graph: cached_graph)
-
-    result = load_or_download_graph(cache_path, (12.0, 11.0, 77.0, 76.0), "drive")
-
-    assert result is graph
-    assert calls["bbox"] == (76.0, 11.0, 77.0, 12.0)
-    assert calls["network_type"] == "drive"
-    assert calls["filepath"] == cache_path
-    assert cache_path.is_file()
+    assert not cache_path.exists()
+    assert not cache_path.parent.exists()
 
 
 def test_nearest_node_passes_longitude_as_x(monkeypatch) -> None:
