@@ -56,12 +56,12 @@ Plans:
 
 **Exit criteria:** property tests prove capacity and double-booking invariants; invalid plans are blocked; a material route/shelter change creates a new version; provenance and freshness are present on every plan.
 
-**Plans:** 1/12 plans complete
+**Plans:** 2/12 plans complete
 
 Plans:
 
 - [x] 03-01-PLAN.md — Workspace, synthetic graph fixture, CI target, capacity-safe min-cost-flow matching with properties
-- [ ] 03-02-PLAN.md — Phase 3 contracts (IntegratedPlan, ValidationResult, ToolResult), shared horizon/footprint helpers, config block
+- [x] 03-02-PLAN.md — Phase 3 contracts (IntegratedPlan, ValidationResult, ToolResult), shared horizon/footprint helpers, config block
 - [ ] 03-03-PLAN.md — WR-03: live weather observations match the scoped query; incidents carry real origin
 - [ ] 03-04-PLAN.md — Migration 0006, labelled synthetic seed + loaders, shelter registry and atomic occupancy
 - [ ] 03-05-PLAN.md — Routing: ETA-aware horizon costs, edge status, cost matrix, k=3 paths, BPR congestion, load-only graph + build script
