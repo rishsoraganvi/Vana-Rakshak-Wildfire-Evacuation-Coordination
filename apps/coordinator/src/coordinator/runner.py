@@ -1,61 +1,75 @@
+"""Phase 3 coordinator graph and runner (TechSpec 6.2, PLAN-01).
+
+Weather runs before fire, then risk, then the parallel specialists, the planning core, the
+rationale, versioned persistence and the audit flush. ``run_coordinator`` streams the graph so
+the last state is always known; if a node raises, the audit rows gathered so far plus a
+``run_failed`` row are still flushed before the error is re-raised (RESEARCH Pitfall 15).
+"""
+
 from __future__ import annotations
 
-from typing import cast
+import json
+import logging
+from typing import Any, cast
 
 from langgraph.graph import END, StateGraph
+from wildfire_core.schemas.phase2 import AuditEntry
 
-from coordinator.graph import (
-    assemble_plan,
-    cluster_hotspots_node,
-    compute_route_node,
-    generate_rationale_node,
-    ingest_trigger,
-    run_fire_ca,
-    run_weather,
-    write_audit,
-)
-from coordinator.state import CoordinatorState
+from coordinator.deps import CoordinatorDeps, default_deps
+from coordinator.graph import NODE_ORDER, make_nodes
+from coordinator.state import CoordinatorState, initial_state
+
+logger = logging.getLogger(__name__)
 
 CoordinatorGraph = StateGraph[CoordinatorState, None, CoordinatorState, CoordinatorState]
 
 
-def build_graph() -> CoordinatorGraph:
+def build_graph(deps: CoordinatorDeps) -> CoordinatorGraph:
     graph = StateGraph(CoordinatorState)
-    graph.add_node("ingest_trigger", ingest_trigger)
-    graph.add_node("run_weather", run_weather)
-    graph.add_node("cluster_hotspots", cluster_hotspots_node)
-    graph.add_node("run_fire_ca", run_fire_ca)
-    graph.add_node("compute_route", compute_route_node)
-    graph.add_node("generate_rationale", generate_rationale_node)
-    graph.add_node("assemble_plan", assemble_plan)
-    graph.add_node("write_audit", write_audit)
+    nodes = make_nodes(deps)
+    for name in NODE_ORDER:
+        graph.add_node(name, cast(Any, nodes[name]))
 
-    graph.set_entry_point("ingest_trigger")
-    graph.add_edge("ingest_trigger", "run_weather")
-    graph.add_edge("run_weather", "cluster_hotspots")
-    graph.add_edge("cluster_hotspots", "run_fire_ca")
-    graph.add_edge("run_fire_ca", "compute_route")
-    graph.add_edge("compute_route", "generate_rationale")
-    graph.add_edge("generate_rationale", "assemble_plan")
-    graph.add_edge("assemble_plan", "write_audit")
-    graph.add_edge("write_audit", END)
+    graph.set_entry_point(NODE_ORDER[0])
+    for current, following in zip(NODE_ORDER, NODE_ORDER[1:], strict=False):
+        graph.add_edge(current, following)
+    graph.add_edge(NODE_ORDER[-1], END)
     return graph
 
 
-def run_coordinator(incident_id: str, run_id: str) -> CoordinatorState:
-    initial_state: CoordinatorState = {
-        "incident_id": incident_id,
-        "run_id": run_id,
-        "hotspot_ids": [],
-        "hotspots": [],
-        "weather_snapshot": None,
-        "clusters": [],
-        "fire_results": [],
-        "routes": [],
-        "rationale": "",
-        "is_llm_fallback": False,
-        "audit_entries": [],
-        "warnings": [],
-        "error": None,
-    }
-    return cast(CoordinatorState, build_graph().compile().invoke(initial_state))
+def _flush_failed_run(deps: CoordinatorDeps, last: CoordinatorState, error: Exception) -> None:
+    """Persist what the run recorded before it failed, plus a ``run_failed`` row."""
+    failure = AuditEntry(
+        incident_id=last["incident_id"],
+        run_id=last["run_id"],
+        node_name="run_failed",
+        inputs_json="{}",
+        outputs_json=json.dumps({"error": type(error).__name__}),
+        latency_ms=0,
+    )
+    entries = [*last["audit_entries"], failure.model_dump(mode="json")]
+    try:
+        deps.repository.flush_audit(entries)  # idempotent: ON CONFLICT (id) DO NOTHING
+    except Exception:
+        logger.exception("Could not flush audit rows for failed run %s", last["run_id"])
+
+
+def run_coordinator(
+    incident_id: str,
+    run_id: str,
+    *,
+    trigger_id: str | None = None,
+    deps: CoordinatorDeps | None = None,
+) -> CoordinatorState:
+    active = deps if deps is not None else default_deps()
+    start = initial_state(incident_id, run_id, trigger_id)
+    last = start
+    try:
+        for snapshot in build_graph(active).compile().stream(start, stream_mode="values"):
+            last = cast(CoordinatorState, snapshot)
+    except Exception as error:
+        _flush_failed_run(active, last, error)
+        raise
+    finally:
+        active.scratch.pop(run_id, None)
+    return last
