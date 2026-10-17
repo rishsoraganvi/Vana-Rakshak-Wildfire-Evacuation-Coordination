@@ -88,6 +88,25 @@ trivially on an empty `dispatches` list.
   reading at the mean hotspot) and **WR-03** (fix the weather ingest so live observations match the scoped
   weather query — currently stored as forecasts with origin `replay`, so real incidents never get a plan).
 
+### Post-research decisions (2026-10-17, after 03-RESEARCH.md)
+- **D-18:** Seed data: ship a **clearly labelled synthetic seed** for shelters and settlements (every row
+  carries `capacity_source='synthetic'` / equivalent provenance, S9) so build and CI are not blocked. Plan a
+  `checkpoint:human-action` task for the user to replace it later with curated real CSVs
+  (`config/seed/shelters_bandipur.csv`, `config/seed/settlements_bandipur.csv`). Refines D-01.
+- **D-19:** Pilot cluster centre is **11.72 N, 76.64 E** (Bandipur); OSM graph and seeds use a ~10 km buffer
+  around it. The OSM build is an explicit script the user runs once (`checkpoint:human-action`); the graph
+  loader must be load-only and never silently download the whole AOI.
+- **D-20:** A settlement **already inside the current fire perimeter** is **exempt from evacuation matching**:
+  it is flagged "inside active fire — needs rescue response" as a reviewer-visible alert, and the plan is still
+  produced for all other groups. D-12 (unplaceable group fails the whole plan) applies to every other group.
+- **D-21:** Accept the researcher's safety defaults as **config-driven values**: P50 penalty ×10, P90 ×3;
+  shelters within 1 km of P90-6h ∪ current perimeter are excluded; only settlements intersecting the P50
+  forecast form evacuee groups (P90-only intersections produce a warning); a cluster with no matching weather
+  fails closed; plans that pass V1–V8 are stored as `pending_review` (approval itself remains Phase 4).
+  V3 and routing share the same "forecast horizon nearest per-edge arrival time" rule.
+- Note: the trigger enum is named `trigger_type` (not `incident_trigger_type`); all three Phase 3 trigger values
+  already exist in it.
+
 ### Claude's Discretion
 - How CI exercises k-paths, congestion and capacity without downloading OSM (e.g. a small subgraph
   extracted from the cached real graph and committed as a fixture, or a richer synthetic fixture).
@@ -146,7 +165,7 @@ trivially on an empty `dispatches` list.
 ### Integration Points
 - New `shelters` table + seed CSV/script; `settlements` population for groups.
 - `plan_versions` gains parent link, diff, and a `failed` status path.
-- `incident_trigger_type` enum already includes `perimeter_change`, `road_blocked`, `shelter_capacity_change`.
+- `trigger_type` enum already includes `perimeter_change`, `road_blocked`, `shelter_capacity_change`.
 - Weather ingest (`ingest_worker`) must write observations the scoped query matches (WR-03).
 
 </code_context>
