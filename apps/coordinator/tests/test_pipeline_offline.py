@@ -172,7 +172,9 @@ def test_coordinator_runs_all_nodes_with_incident_scoped_data(monkeypatch) -> No
     assert len(engine.audit_parameters) == 8
 
     rationale_entries = [
-        entry for entry in final_state["audit_entries"] if entry["node_name"] == "generate_rationale"
+        entry
+        for entry in final_state["audit_entries"]
+        if entry["node_name"] == "generate_rationale"
     ]
     assert len(rationale_entries) == 1
     assert rationale_entries[0]["model_metadata"]["model"] == "test-model"

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Sequence
 from datetime import datetime
 from typing import Any
@@ -22,7 +23,9 @@ def flush_audit_entries(entries: Sequence[dict[str, Any]], session: Connection) 
             "agent_input": entry["inputs_json"],
             "agent_output": entry["outputs_json"],
             "latency_ms": entry["latency_ms"],
-            "model_metadata": entry.get("model_metadata"),
+            "model_metadata": json.dumps(entry["model_metadata"], sort_keys=True)
+            if entry.get("model_metadata") is not None
+            else None,
             "created_at": datetime.fromisoformat(entry["created_at"])
             if isinstance(entry["created_at"], str)
             else entry["created_at"],

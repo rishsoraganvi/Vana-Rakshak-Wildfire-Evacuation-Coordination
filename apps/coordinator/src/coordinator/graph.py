@@ -29,7 +29,7 @@ from wildfire_core.schemas.phase2 import (
 )
 
 from coordinator.audit import flush_audit_entries
-from coordinator.llm.groq_adapter import generate_rationale
+from coordinator.llm.groq_adapter import base_model_metadata, generate_rationale
 from coordinator.state import CoordinatorState
 
 
@@ -80,6 +80,7 @@ def _audit(
     inputs: dict[str, Any],
     outputs: dict[str, Any],
     started_ms: int,
+    model_metadata: dict[str, Any] | None = None,
 ) -> None:
     entry = AuditEntry(
         incident_id=state["incident_id"],
@@ -88,6 +89,7 @@ def _audit(
         inputs_json=json.dumps(inputs, sort_keys=True, default=str),
         outputs_json=json.dumps(outputs, sort_keys=True, default=str),
         latency_ms=max(0, time.monotonic_ns() // 1_000_000 - started_ms),
+        model_metadata=model_metadata,
     )
     state["audit_entries"].append(entry.model_dump(mode="json"))
 
@@ -327,20 +329,31 @@ def compute_route_node(state: CoordinatorState) -> CoordinatorState:
 
 def generate_rationale_node(state: CoordinatorState) -> CoordinatorState:
     started_ms = time.monotonic_ns() // 1_000_000
+    settings = _settings()
     if state["fire_result"] is None or state["weather_snapshot"] is None:
         state["rationale"] = (
             "[DETERMINISTIC FALLBACK] Fire or weather data unavailable. Human review required."
         )
         state["is_llm_fallback"] = True
+        model_metadata: dict[str, Any] = {
+            **base_model_metadata(settings),
+            "llm_called": False,
+            "is_fallback": True,
+            "fallback_reason": "inputs_unavailable",
+            "finish_reason": None,
+            "usage": None,
+            "response_model": None,
+        }
     else:
-        rationale, is_fallback = generate_rationale(
-            FireSpreadResult.model_validate(state["fire_result"]),
+        result = generate_rationale(
+            [FireSpreadResult.model_validate(state["fire_result"])],
             WeatherSnapshot.model_validate(state["weather_snapshot"]),
             [RouteResult.model_validate(item) for item in state["routes"]],
-            _settings(),
+            settings,
         )
-        state["rationale"] = rationale
-        state["is_llm_fallback"] = is_fallback
+        state["rationale"] = result.text
+        state["is_llm_fallback"] = result.is_fallback
+        model_metadata = result.model_metadata
 
     _audit(
         state,
@@ -348,6 +361,7 @@ def generate_rationale_node(state: CoordinatorState) -> CoordinatorState:
         {"fire_available": state["fire_result"] is not None, "route_count": len(state["routes"])},
         {"rationale": state["rationale"], "is_llm_fallback": state["is_llm_fallback"]},
         started_ms,
+        model_metadata=model_metadata,
     )
     return state
 
