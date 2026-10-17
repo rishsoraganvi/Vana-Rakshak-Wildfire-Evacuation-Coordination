@@ -40,7 +40,7 @@
 - [ ] **PLAT-03**: Dashboard provides a map-first overview, incident detail, plan review, validator strip, agent activity, freshness warnings, and simulation badges.
 - [ ] **PLAT-04**: System operates in degraded mode with cached data and deterministic planning when external providers or the LLM fail.
 - [ ] **PLAT-05**: Replay mode runs historical/scenario inputs through the same pipeline with a simulated clock.
-- [x] **PLAT-06**: Fire, routing, matching, validators, contracts, review flow, and replay behavior have unit, property, integration, and end-to-end coverage appropriate to each phase.
+- [ ] **PLAT-06**: Fire, routing, matching, validators, contracts, review flow, and replay behavior have unit, property, integration, and end-to-end coverage appropriate to each phase.
 - [ ] **PLAT-07**: System meets initial targets: plan P95 <= 5 minutes, re-plan <= 2 minutes, valid routes and capacities, zero approved capacity violations, and 100% approval records for dissemination.
 
 ## v2 Requirements
@@ -84,7 +84,9 @@
 | Requirement group | Phase | Status |
 |---|---:|---|
 | MON-01..04, FIRE-01..02 | 1 | Pending |
-| PLAN-01..02, PLAT-02, PLAT-06 | 2 | Pending |
+| PLAN-02, PLAT-02 (Phase 2 slice) | 2 | Complete (human UAT pending) |
+| PLAN-01 (parallel dispatch) | 3 | Pending |
+| PLAT-06 (Phase 2 slice) | 2 | Covered; requirement spans phases, closes in 5 |
 | PLAN-03..04, PLAN-07..08 | 3 | Pending |
 | SAFE-01..05, PLAT-01, PLAT-04 | 4 | Pending |
 | PLAT-03, PLAT-05, PLAT-06 | 5 | Pending |
