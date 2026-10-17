@@ -19,6 +19,7 @@ def flush_audit_entries(entries: Sequence[dict[str, Any]], session: Connection) 
             "id": UUID(entry["entry_id"]),
             "incident_id": UUID(entry["incident_id"]),
             "run_id": UUID(entry["run_id"]),
+            "agent": entry.get("agent", "coordinator"),
             "node_name": entry["node_name"],
             "agent_input": entry["inputs_json"],
             "agent_output": entry["outputs_json"],
@@ -39,7 +40,7 @@ def flush_audit_entries(entries: Sequence[dict[str, Any]], session: Connection) 
                 (id, incident_id, agent, status, input, output, latency_ms,
                  run_id, node_name, model_metadata, created_at)
             VALUES
-                (:id, :incident_id, 'coordinator', 'succeeded',
+                (:id, :incident_id, CAST(:agent AS agent_name), 'succeeded',
                  CAST(:agent_input AS jsonb), CAST(:agent_output AS jsonb), :latency_ms,
                  :run_id, :node_name, CAST(:model_metadata AS jsonb), :created_at)
             ON CONFLICT (id) DO NOTHING

@@ -82,8 +82,16 @@ async def _gather(
 
 
 def _run(coro: Coroutine[Any, Any, T]) -> T:
-    """Run ``coro`` to completion on a fresh event loop."""
-    return asyncio.run(coro)
+    """Run ``coro`` on a private loop that is closed without waiting for worker threads.
+
+    ``asyncio.run`` would wait for a timed-out specialist's thread when it shuts the default
+    executor down; closing the loop directly shuts it down with ``wait=False``.
+    """
+    loop = asyncio.new_event_loop()
+    try:
+        return loop.run_until_complete(coro)
+    finally:
+        loop.close()
 
 
 def run_specialists(
