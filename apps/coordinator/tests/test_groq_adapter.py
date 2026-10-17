@@ -268,3 +268,11 @@ def test_default_llm_config_from_defaults_yaml(monkeypatch) -> None:
     assert settings.llm_provider == "groq"
     assert settings.llm_model == "openai/gpt-oss-20b"
     assert settings.llm_enabled is False
+
+
+def test_blank_env_value_does_not_shadow_config_default(monkeypatch) -> None:
+    monkeypatch.setenv("LLM_MODEL", "")
+
+    settings = load_settings(Path("config/defaults.yaml"))
+
+    assert settings.llm_model == "openai/gpt-oss-20b"

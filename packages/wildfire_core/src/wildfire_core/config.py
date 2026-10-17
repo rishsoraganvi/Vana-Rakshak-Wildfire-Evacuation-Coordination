@@ -113,6 +113,10 @@ def load_settings(config_path: Path | None = None) -> Settings:
         if env_name not in os.environ:
             continue
         raw = os.environ[env_name]
+        if not raw.strip():
+            # A blank variable (e.g. LLM_MODEL= copied from a template) means "unset", so it
+            # must not shadow the config/defaults.yaml value.
+            continue
         if field_name == "firms_sources":
             values[field_name] = tuple(item.strip() for item in raw.split(",") if item.strip())
         elif field_name == "llm_enabled":
