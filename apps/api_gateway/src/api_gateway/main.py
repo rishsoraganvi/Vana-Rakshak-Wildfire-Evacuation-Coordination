@@ -7,6 +7,7 @@ from wildfire_core.db.session import create_db_engine
 
 from .health import readiness
 from .routers.config import create_config_router
+from .routers.incidents import create_incidents_router
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -30,6 +31,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return result
 
     app.include_router(create_config_router(resolved), prefix="/api/v1")
+    app.include_router(create_incidents_router(), prefix="/api/v1", tags=["incidents"])
     return app
 
 

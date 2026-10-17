@@ -4,6 +4,8 @@ version = "0.1.0"
 description = "Vana-Rakshak wildfire evacuation coordination foundation"
 requires-python = ">=3.11,<3.13"
 dependencies = [
+  "agent-routing",
+  "coordinator",
   "alembic==1.20.0",
   "fastapi==0.142.2",
   "httpx==0.28.1",
@@ -31,24 +33,34 @@ members = [
   "apps/ingest_worker",
   "apps/agents/fire",
   "apps/agents/weather",
+  "apps/agents/routing",
+  "apps/coordinator",
 ]
 
 [tool.uv.sources]
+agent-routing = { workspace = true }
+coordinator = { workspace = true }
 wildfire-core = { workspace = true }
 
 [tool.uv]
 default-groups = ["dev"]
 
 [dependency-groups]
-dev = ["hypothesis==6.168.3", "types-pyyaml==6.0.12.20250915"]
+dev = ["hypothesis==6.168.3", "types-networkx", "types-pyyaml==6.0.12.20250915"]
 
 [tool.pytest.ini_options]
-markers = ["compose: requires the local Docker Compose services"]
+markers = [
+  "compose: requires the local Docker Compose services",
+  "integration: end-to-end tests requiring database and GROQ_API_KEY",
+  "smoke: full Compose stack tests",
+]
 pythonpath = [
   "packages/wildfire_core/src",
   "apps/api_gateway/src",
+  "apps/coordinator/src",
   "apps/ingest_worker/src",
   "apps/agents/fire/src",
+  "apps/agents/routing/src",
   "apps/agents/weather/src",
 ]
 

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import json
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from sqlalchemy import Engine, text
 
@@ -30,6 +32,7 @@ def record_new_hotspot_trigger(
     threshold: int,
     detected_at: datetime,
     debounce_seconds: int = 300,
+    hotspot_ids: Sequence[str | UUID] = (),
 ) -> TriggerDecision:
     decision = evaluate_new_hotspot(count, threshold)
     if not decision.crossed:
@@ -69,7 +72,13 @@ def record_new_hotspot_trigger(
             ),
             {
                 "incident_id": incident_id,
-                "details": f'{{"count": {count}, "threshold": {threshold}}}',
+                "details": json.dumps(
+                    {
+                        "count": count,
+                        "threshold": threshold,
+                        "hotspot_ids": [str(hotspot_id) for hotspot_id in hotspot_ids],
+                    }
+                ),
                 "detected_at": detected_at,
                 "coalesced_into": previous[0] if previous else None,
             },

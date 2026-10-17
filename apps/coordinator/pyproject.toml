@@ -1,0 +1,20 @@
+[project]
+name = "coordinator"
+version = "0.1.0"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+    "agent-fire",
+    "agent-routing",
+    "agent-weather",
+    "groq>=0.13.0",
+    "ingest-worker",
+    "langgraph>=0.2.0",
+    "wildfire-core",
+]
+
+[tool.uv.sources]
+agent-fire = { workspace = true }
+agent-routing = { workspace = true }
+agent-weather = { workspace = true }
+ingest-worker = { workspace = true }
+wildfire-core = { workspace = true }

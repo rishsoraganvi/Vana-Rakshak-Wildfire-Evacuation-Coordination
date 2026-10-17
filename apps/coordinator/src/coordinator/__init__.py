@@ -1,0 +1,1 @@
+"""Wildfire incident coordination components."""

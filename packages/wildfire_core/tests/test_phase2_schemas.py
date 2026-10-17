@@ -69,6 +69,17 @@ def test_route_result_blocked_classification():
     assert len(r.osm_node_path) == 3
     assert uuid.UUID(r.route_id)
 
+    cluster_route = RouteResult(
+        group_id="group-1",
+        origin_cluster_id="cluster-1",
+        osm_node_path=(1001, 1002),
+        total_distance_m=750.0,
+        estimated_travel_time_s=60.0,
+        safety_classification="safe",
+    )
+    assert cluster_route.origin_settlement_id is None
+    assert cluster_route.origin_cluster_id == "cluster-1"
+
     with pytest.raises(ValidationError):
         RouteResult(
             group_id="group-1",
@@ -77,6 +88,22 @@ def test_route_result_blocked_classification():
             total_distance_m=10.0,
             estimated_travel_time_s=1.0,
             safety_classification="safe",
+        )
+
+    route_fields = {
+        "group_id": "group-1",
+        "osm_node_path": (1001, 1002),
+        "total_distance_m": 750.0,
+        "estimated_travel_time_s": 60.0,
+        "safety_classification": "safe",
+    }
+    with pytest.raises(ValidationError):
+        RouteResult(**route_fields)
+    with pytest.raises(ValidationError):
+        RouteResult(
+            **route_fields,
+            origin_settlement_id="settlement-1",
+            origin_cluster_id="cluster-1",
         )
 
 
