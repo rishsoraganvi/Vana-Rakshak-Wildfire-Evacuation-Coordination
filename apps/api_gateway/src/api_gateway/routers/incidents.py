@@ -1,4 +1,4 @@
-"""Local-only Phase 2 read APIs, pending Phase 4 JWT viewer roles."""
+"""Local-only read APIs (Phase 2, Phase 3 plans), pending Phase 4 JWT viewer roles."""
 
 from __future__ import annotations
 
@@ -38,7 +38,13 @@ class PlanResponse(BaseModel):
     is_simulated: bool
     warnings: list[str]
     created_at: datetime
-    freshness: dict[str, float | None]
+    freshness: dict[str, Any]
+    validation: list[dict[str, Any]] = []
+    failure_reasons: list[str] = []
+    alerts: list[dict[str, Any]] = []
+    parent_plan_id: str | None = None
+    used_fallback: bool = False
+    plan_schema_version: str = "2.0"
 
 
 class AuditEntryResponse(BaseModel):
@@ -61,6 +67,12 @@ def _plan_data(value: Any) -> dict[str, Any]:
     if isinstance(value, str):
         value = json.loads(value)
     return value if isinstance(value, dict) else {}
+
+
+def _json_list(value: Any) -> list[Any]:
+    if isinstance(value, str):
+        value = json.loads(value)
+    return list(value) if isinstance(value, list) else []
 
 
 def _age_minutes(value: Any) -> float | None:
@@ -138,10 +150,14 @@ def create_incidents_router() -> APIRouter:
             """
         )
         with _engine(request).connect() as connection:
-            rows = connection.execute(
-                statement,
-                {"status": status, "limit": limit, "offset": offset},
-            ).mappings().all()
+            rows = (
+                connection.execute(
+                    statement,
+                    {"status": status, "limit": limit, "offset": offset},
+                )
+                .mappings()
+                .all()
+            )
         return [
             IncidentSummary(
                 incident_id=str(row["incident_id"]),
@@ -162,10 +178,11 @@ def create_incidents_router() -> APIRouter:
             """
             SELECT p.id AS plan_id, p.incident_id, p.version, p.status::text AS status,
                    p.rationale_md, p.is_llm_fallback, p.is_simulated, p.warnings,
-                   p.plan_data, p.created_at
+                   p.plan_data, p.created_at, p.validation, p.freshness, p.parent_plan_id,
+                   p.used_fallback, p.plan_schema_version
             FROM plan_versions p
             WHERE p.incident_id = :incident_id
-              AND p.status IN ('draft', 'pending_review')
+              AND p.status IN ('draft', 'pending_review', 'failed')
             ORDER BY p.version DESC
             LIMIT 1
             """
@@ -174,12 +191,15 @@ def create_incidents_router() -> APIRouter:
         with engine.connect() as connection:
             row = connection.execute(statement, {"incident_id": incident_id}).mappings().first()
         if row is None:
-            raise HTTPException(status_code=404, detail="Incident or draft plan not found")
+            raise HTTPException(status_code=404, detail="Incident or plan not found")
 
         warnings = row["warnings"]
         if isinstance(warnings, str):
             warnings = json.loads(warnings)
         plan_data = _plan_data(row["plan_data"])
+        # Phase 3 plans store their freshness; Phase 2 rows (empty column) are computed as before.
+        stored_freshness = _plan_data(row.get("freshness"))
+        parent_plan_id = row.get("parent_plan_id")
         return PlanResponse(
             plan_id=str(row["plan_id"]),
             incident_id=str(row["incident_id"]),
@@ -190,7 +210,13 @@ def create_incidents_router() -> APIRouter:
             is_simulated=bool(row["is_simulated"]),
             warnings=warnings or [],
             created_at=row["created_at"],
-            freshness=_freshness(engine, row["incident_id"], plan_data),
+            freshness=stored_freshness or _freshness(engine, row["incident_id"], plan_data),
+            validation=_json_list(row.get("validation")),
+            failure_reasons=[str(item) for item in _json_list(plan_data.get("failure_reasons"))],
+            alerts=_json_list(plan_data.get("alerts")),
+            parent_plan_id=str(parent_plan_id) if parent_plan_id is not None else None,
+            used_fallback=bool(row.get("used_fallback") or False),
+            plan_schema_version=str(row.get("plan_schema_version") or "2.0"),
         )
 
     @router.get("/audit/{incident_id}", response_model=list[AuditEntryResponse])
@@ -207,9 +233,10 @@ def create_incidents_router() -> APIRouter:
             ).scalar_one_or_none()
             if exists is None:
                 raise HTTPException(status_code=404, detail="Incident not found")
-            rows = connection.execute(
-                text(
-                    """
+            rows = (
+                connection.execute(
+                    text(
+                        """
                     SELECT id AS entry_id, run_id, node_name, latency_ms,
                            model_metadata, created_at, (output IS NOT NULL) AS has_outputs
                     FROM agent_runs
@@ -217,9 +244,12 @@ def create_incidents_router() -> APIRouter:
                     ORDER BY created_at ASC
                     LIMIT :limit
                     """
-                ),
-                {"incident_id": incident_id, "limit": limit},
-            ).mappings().all()
+                    ),
+                    {"incident_id": incident_id, "limit": limit},
+                )
+                .mappings()
+                .all()
+            )
         return [
             AuditEntryResponse(
                 entry_id=str(row["entry_id"]),

@@ -145,6 +145,90 @@ def test_plan_endpoint_returns_draft_and_freshness() -> None:
     assert response.json()["freshness"] == {"firms_age_min": None, "weather_age_min": 0.0}
 
 
+def _phase3_row(incident_id, plan_id, status, **overrides):
+    row = {
+        "plan_id": plan_id,
+        "incident_id": incident_id,
+        "version": 2,
+        "status": status,
+        "rationale_md": "Template rationale",
+        "is_llm_fallback": True,
+        "is_simulated": True,
+        "warnings": [],
+        "plan_data": {},
+        "created_at": datetime.now(UTC),
+        "validation": [],
+        "freshness": {},
+        "parent_plan_id": None,
+        "used_fallback": False,
+        "plan_schema_version": "3.0",
+    }
+    row.update(overrides)
+    return row
+
+
+def test_plan_endpoint_serves_a_failed_plan_with_reasons_and_validation() -> None:
+    incident_id, plan_id, parent_id = uuid4(), uuid4(), uuid4()
+    validation = [{"validator_id": "V1", "status": "fail", "reasons": ["capacity"]}]
+    engine = FakeEngine(
+        plans=[
+            _phase3_row(
+                incident_id,
+                plan_id,
+                "failed",
+                validation=validation,
+                parent_plan_id=parent_id,
+                plan_data={
+                    "failure_reasons": ["group set-near: no shelter capacity"],
+                    "alerts": [{"kind": "capacity_shortfall", "message": "short by 45"}],
+                },
+                freshness={"firms_age_min": 30, "weather_age_min_by_cluster": {"c1": 20}},
+            )
+        ]
+    )
+
+    with make_client(engine) as client:
+        response = client.get(f"/api/v1/incidents/{incident_id}/plan")
+
+    body = response.json()
+    assert response.status_code == 200
+    assert body["status"] == "failed"
+    assert body["failure_reasons"] == ["group set-near: no shelter capacity"]
+    assert body["validation"] == validation
+    assert body["alerts"][0]["kind"] == "capacity_shortfall"
+    assert body["parent_plan_id"] == str(parent_id)
+    assert body["plan_schema_version"] == "3.0"
+
+
+def test_plan_endpoint_passes_stored_phase3_freshness_through() -> None:
+    incident_id, plan_id = uuid4(), uuid4()
+    stored = {
+        "computed_at": "2026-10-17T12:00:00Z",
+        "firms_age_min": 30,
+        "weather_age_min_by_cluster": {"c1": 20},
+        "weather_age_min_max": 20,
+        "stale_inputs": [],
+    }
+    engine = FakeEngine(
+        plans=[_phase3_row(incident_id, plan_id, "pending_review", freshness=stored)]
+    )
+
+    with make_client(engine) as client:
+        response = client.get(f"/api/v1/incidents/{incident_id}/plan")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "pending_review"
+    assert response.json()["freshness"] == stored
+    assert response.json()["failure_reasons"] == []
+
+
+def test_plan_endpoint_404_names_plans_not_drafts() -> None:
+    with make_client(FakeEngine()) as client:
+        response = client.get(f"/api/v1/incidents/{uuid4()}/plan")
+
+    assert response.json()["detail"] == "Incident or plan not found"
+
+
 def test_audit_endpoint_returns_404_for_unknown_incident() -> None:
     with make_client(FakeEngine()) as client:
         response = client.get(f"/api/v1/audit/{uuid4()}")
