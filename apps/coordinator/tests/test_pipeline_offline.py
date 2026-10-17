@@ -437,3 +437,66 @@ def test_every_cluster_is_simulated_and_routing_penalises_union_of_fires(monkeyp
 
     assert len(rationale_inputs) == 1
     assert len(rationale_inputs[0]) == 2
+
+def _fixed_fire_fn(current_wkt: str, p50_wkt: str):
+    def fire(cluster, _weather, **_kwargs) -> FireSpreadResult:
+        return _stub_fire(current_wkt, p50_wkt, cluster.cluster_id)
+
+    return fire
+
+
+def test_route_origin_moves_outside_current_perimeter(monkeypatch) -> None:
+    rows, ids = _hotspot_rows([(11.72, 76.64)], counts=(4,))
+    engine = FakeEngine(rows, ids)
+    graph = _toy_graph(
+        {1: (76.64, 11.72), 2: (76.66, 11.72), 3: (77.30, 11.72), 4: (76.00, 11.72)},
+        [(1, 2, 100.0, 10.0), (2, 3, 1000.0, 100.0), (1, 4, 500.0, 50.0)],
+    )
+    _install_pipeline(
+        monkeypatch,
+        engine=engine,
+        settings=_pipeline_settings(),
+        graph=graph,
+        fire_fn=_fixed_fire_fn(box(76.63, 11.71, 76.65, 11.73).wkt, "POLYGON EMPTY"),
+    )
+
+    final_state = build_graph().compile().invoke(_empty_state())
+
+    assert final_state["error"] is None
+    assert len(final_state["routes"]) == 1
+    route = final_state["routes"][0]
+    assert tuple(route["osm_node_path"]) == (2, 3)
+    assert route["safety_classification"] == "safe"
+    assert any(
+        "moved to nearest road node outside the current perimeter" in warning
+        for warning in final_state["warnings"]
+    )
+
+
+def test_blocked_candidates_choose_least_fire_exposure(monkeypatch) -> None:
+    rows, ids = _hotspot_rows([(11.72, 76.66)], counts=(4,))
+    engine = FakeEngine(rows, ids)
+    graph = _toy_graph(
+        {2: (76.66, 11.72), 3: (77.30, 11.72), 4: (76.00, 11.72)},
+        [(2, 3, 5000.0, 500.0), (2, 4, 500.0, 50.0)],
+    )
+    ring = (
+        "POLYGON((76.61 11.67, 76.71 11.67, 76.71 11.77, 76.61 11.77, 76.61 11.67), "
+        "(76.65 11.71, 76.67 11.71, 76.67 11.73, 76.65 11.73, 76.65 11.71))"
+    )
+    _install_pipeline(
+        monkeypatch,
+        engine=engine,
+        settings=_pipeline_settings(),
+        graph=graph,
+        fire_fn=_fixed_fire_fn(ring, "POLYGON EMPTY"),
+    )
+
+    final_state = build_graph().compile().invoke(_empty_state())
+
+    assert final_state["error"] is None
+    assert len(final_state["routes"]) == 1
+    route = final_state["routes"][0]
+    assert tuple(route["osm_node_path"]) == (2, 4)
+    assert route["safety_classification"] == "blocked"
+    assert any("No safe route found for fire cluster" in w for w in final_state["warnings"])
