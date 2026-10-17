@@ -94,6 +94,7 @@ def test_snapshot_uses_row_values_without_coercion() -> None:
     assert snapshot.temperature_c == 31.0
     assert snapshot.is_stale is False
     assert snapshot.stale_age_min is None
+    assert snapshot.age_min == 10  # always set, stale or not
 
 
 def test_snapshot_marks_stale_rows() -> None:
@@ -101,6 +102,13 @@ def test_snapshot_marks_stale_rows() -> None:
     snapshot = get_weather_snapshot(11.72, 76.64, connection, now=FIXED)
     assert snapshot.is_stale is True
     assert snapshot.stale_age_min == 180
+    assert snapshot.age_min == 180
+
+
+def test_snapshot_age_is_never_negative() -> None:
+    connection = _FakeConnection(_row(FIXED + timedelta(seconds=30)))
+    snapshot = get_weather_snapshot(11.72, 76.64, connection, now=FIXED)
+    assert snapshot.age_min == 0
 
 
 def test_snapshot_raises_lookup_error_when_no_complete_row() -> None:
