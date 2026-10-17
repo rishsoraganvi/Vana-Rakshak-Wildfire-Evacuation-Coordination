@@ -66,6 +66,34 @@ Task IDs are filled in by the planner/executor; requirement → test mapping is 
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
+### Planner task mapping (filled at plan time)
+
+| Requirement row | Plan / Task | Notes |
+|-----------------|-------------|-------|
+| PLAN-04 matching properties | 03-01 T2 | `apps/agents/shelter/tests/test_matching_properties.py` |
+| PLAN-04 splitting / unplaceable named | 03-01 T1-T2 | `apps/agents/shelter/tests/test_matching.py` |
+| PLAN-04 update_occupancy atomic | 03-04 T3 | unit `test_registry.py`; live `tests/integration/test_shelters_db.py` |
+| PLAN-04 shelter exclusion | 03-04 T3 | `apps/agents/shelter/tests/test_exclusion.py` |
+| PLAN-03 horizon costs | 03-05 T1 | `apps/agents/routing/tests/test_costs_horizons.py` |
+| PLAN-03 k=3 paths | 03-05 T1 | `apps/agents/routing/tests/test_k_paths.py` |
+| PLAN-03 BPR congestion | 03-05 T2 | `apps/agents/routing/tests/test_congestion.py` |
+| PLAN-03 blocked edge status / road_blocked | 03-05 T1, 03-11 T2 | edge-status blocking is in `test_costs_horizons.py`; road_blocked detection is in `tests/unit/test_replan_triggers.py`. Re-plan entry tests live in `apps/coordinator/tests/test_replan_entry.py`, renamed from the map's `apps/coordinator/tests/test_replan_triggers.py` to avoid a pytest basename collision with `tests/unit/test_replan_triggers.py` |
+| PLAN-07 resolver / fallback | 03-09 T2 | `test_resolver.py`, `test_fallback_planner.py` |
+| PLAN-07 LLM disabled / error | 03-07 T3 | `test_llm_menu.py` |
+| PLAN-08 V1-V8 | 03-06 T1/T3, 03-07 T2 | V1-V7 in `test_validators.py` and `test_validator_properties.py`; V8 in `test_grounding.py`, a separate module because V8 runs after the rationale step |
+| PLAN-08 failed, never pending_review | 03-07 T1 | `test_plan_assembly.py` |
+| PLAN-08 material diff / parent link | 03-08 T2, 03-11 T1 | `test_plan_diff.py`, `test_replan_entry.py` |
+| PLAN-08 provenance + freshness | 03-07 T2, 03-10 T1 | `test_plan_provenance.py`, `test_pipeline_phase3.py` |
+| PLAN-08 migration 0006 / immutability | 03-04 T2, 03-08 T3 | `tests/unit/test_migration_0006.py` plus `alembic --sql`; live `tests/integration/test_plan_versions_db.py` |
+| PLAN-01 parallel dispatch | 03-10 T2 | `test_dispatch.py` |
+| D-14/D-15 thresholds + debounce | 03-11 T2 | `tests/unit/test_replan_triggers.py` |
+| D-17 WR-01 per-cluster weather | 03-10 T3 | `test_weather_per_cluster.py` |
+| D-17 WR-03 parser / ingest | 03-03 T1-T2 | `tests/unit/test_weather_parser.py`; live `tests/integration/test_weather_ingest_to_plan.py` |
+| D-20/D-21 risk assessment | 03-06 T1-T2 | `apps/agents/fire/tests/test_risk.py` |
+| End to end + v2 on perimeter change | 03-10 T1, 03-11 T1 | `test_pipeline_phase3.py`, `test_replan_entry.py` |
+| Wave 0: .gitignore, graph fixture, Hypothesis profile, shelter package, CI target | 03-01 | |
+| Wave 0: migration 0006, config block, repository interface | 03-04, 03-02, 03-08 | |
+
 ---
 
 ## Wave 0 Requirements
