@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 current_phase: 03
 status: executing
-stopped_at: Completed 03-02-PLAN.md
+stopped_at: Completed 03-03-PLAN.md
 last_updated: "2026-10-17T13:10:00.000Z"
 state_head: 32c54a5ad4930654e861757e5555d09517e0405a
 progress:
   total_phases: 6
   completed_phases: 2
   total_plans: 24
-  completed_plans: 14
-  percent: 38
+  completed_plans: 15
+  percent: 40
 current_phase_name: Capacity-Aware Coordinated Planning
 ---
 
@@ -28,10 +28,10 @@ See: `.planning/PROJECT.md` (updated 2026-10-01)
 Current Phase: 03
 
 - Phase: 3 of 6 (executing)
-- Current Plan: 3 of 12
-- Status: Plan 03-02 complete; Phase 2 verification human_needed (2 non-blocking UAT items)
-- Progress: 17% of Phase 3 (2/12 plans)
-- Last activity: Plan 03-02 executed - Phase 3 contracts (IntegratedPlan S5/D-11 invariants, ToolResult), shared nearest-horizon rule, footprint unions, validated Phase 3 config block
+- Current Plan: 4 of 12
+- Status: Plan 03-03 complete; Phase 2 verification human_needed (2 non-blocking UAT items)
+- Progress: 25% of Phase 3 (3/12 plans)
+- Last activity: Plan 03-03 executed - WR-03 fixed (parse_open_meteo splits observations from forecasts with a required origin; hotspot-trigger incidents carry the real origin). Previously: Plan 03-02 executed - Phase 3 contracts (IntegratedPlan S5/D-11 invariants, ToolResult), shared nearest-horizon rule, footprint unions, validated Phase 3 config block
 
 ## Decisions and Constraints
 
@@ -71,7 +71,7 @@ Complete the 2 Phase 2 UAT items with `/gsd-verify-work 2` (02-UAT.md). Operator
 ## Session
 
 **Last session:** 2026-10-17T09:35:02.255Z
-**Stopped at:** Completed 03-02-PLAN.md
+**Stopped at:** Completed 03-03-PLAN.md
 **Resume file:** None
 
 ## Performance Metrics
@@ -86,6 +86,7 @@ Complete the 2 Phase 2 UAT items with `/gsd-verify-work 2` (02-UAT.md). Operator
 | Phase 02 P07 | 40min | 3 tasks | 8 files |
 | Phase 03 P01 | 40min | 3 tasks | 18 files |
 | Phase 03 P02 | 35min | 3 tasks | 10 files |
+| Phase 03 P03 | 25min | 2 tasks | 7 files |
 
 ## Decisions
 
@@ -95,3 +96,4 @@ Complete the 2 Phase 2 UAT items with `/gsd-verify-work 2` (02-UAT.md). Operator
 - [Phase 2]: 02-07: fire_results (one per cluster) replaces singular fire_result; all routing penalised by union of every cluster current/P50 perimeters; origin = nearest node outside union current perimeter; blocked fallback keeps least-exposure route; replay route on 3-node stub is truthfully blocked
 - [Phase 3]: 03-01: agent_shelter.match_groups_to_shelters uses integer-decisecond nx.min_cost_flow with a diagnostic U sink; uv.lock revision header kept at 5 by hand (local uv 0.12.5 writes 3, CI pins 0.8.17); types-networkx not installed locally so mypy was verified with --ignore-missing-imports
 - [Phase 3]: 03-02: IntegratedPlan enforces S5 (pending_review needs V1..V8 in order, none failing) and D-11 (failed plan has no routes/assignments, needs a reason) in the schema; freshness/provenance required; nearest_horizon_h ties go later; Settings rejects any fix_menu_order other than next_path/rematch/split
+- [Phase 3]: 03-03: WR-03 fixed - parse_open_meteo requires an origin and sets is_forecast = valid_time > issued_at; record_new_hotspot_trigger requires a validated origin bound via CAST(:origin AS data_origin); both allow-lists derive from wildfire_core Origin
