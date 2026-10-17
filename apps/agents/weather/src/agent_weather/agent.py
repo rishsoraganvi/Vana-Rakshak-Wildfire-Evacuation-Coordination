@@ -112,4 +112,5 @@ def get_weather_snapshot(
         temperature_c=float(row["temperature_c"]),
         is_stale=is_stale,
         stale_age_min=int(age_min) if is_stale else None,
+        age_min=max(0, int(age_min)),
     )

@@ -792,6 +792,7 @@ class InMemoryPlanningRepository:
             temperature_c=point.temperature_c,
             is_stale=is_stale,
             stale_age_min=int(age_min) if is_stale else None,
+            age_min=max(0, int(age_min)),
         )
 
     def settlements(self) -> list[SettlementRecord]:
