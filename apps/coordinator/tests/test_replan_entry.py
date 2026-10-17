@@ -6,7 +6,12 @@ from datetime import timedelta
 from uuid import uuid4
 
 import pytest
-from coordinator.replan import ReplanObservation, check_and_replan, replan_incident
+from coordinator.replan import (
+    ReplanObservation,
+    check_and_replan,
+    detect_replan_triggers,
+    replan_incident,
+)
 from coordinator.runner import run_coordinator
 from pipeline_factory import (
     INCIDENT_ID,
@@ -18,7 +23,7 @@ from pipeline_factory import (
 from shapely.geometry import box
 from wildfire_core.clock import SimClock
 from wildfire_core.schemas.phase2 import FireSpreadResult, HotspotCluster, WeatherSnapshot
-from wildfire_core.schemas.plan import IntegratedPlan
+from wildfire_core.schemas.plan import EdgeStatusEntry, IntegratedPlan, ShelterSnapshot
 
 
 def wide_fire(cluster: HotspotCluster, weather: WeatherSnapshot, **_kwargs) -> FireSpreadResult:
@@ -140,3 +145,99 @@ def test_deferred_trigger_types_are_rejected(trigger_type: str) -> None:
     with pytest.raises(ValueError):
         replan_incident(INCIDENT_ID, trigger_type, {}, deps=deps)
     assert len(repo.triggers) == triggers_before
+
+
+def _edge_set(plan: IntegratedPlan) -> set[tuple[int, int, int]]:
+    return {
+        (route.osm_node_path[i], route.osm_node_path[i + 1], key)
+        for route in plan.routes
+        for i, key in enumerate(route.osm_edge_keys)
+    }
+
+
+def test_road_blocked_on_a_route_edge_replans_around_it() -> None:
+    settings = make_settings()
+    repo, deps, v1 = _first_plan(settings)
+    blocked = sorted(_edge_set(v1))[0]
+    repo.set_edge_status(*blocked, "blocked")
+
+    observation = ReplanObservation(
+        incident_id=INCIDENT_ID,
+        edge_statuses=(
+            EdgeStatusEntry(u=blocked[0], v=blocked[1], key=blocked[2], status="blocked"),
+        ),
+    )
+    outcomes = check_and_replan(observation, deps=deps)
+
+    assert [item.status for item in outcomes] == ["new_version"]
+    stored = repo.latest_plan(INCIDENT_ID)
+    assert stored is not None and stored.version == 2
+    v2 = IntegratedPlan.model_validate(stored.plan_data)
+    assert v2.parent_plan_id == v1.plan_id
+    assert blocked not in _edge_set(v2)
+    assert repo.triggers[outcomes[0].trigger_id]["type"] == "road_blocked"
+
+
+def test_road_status_off_every_route_triggers_nothing() -> None:
+    settings = make_settings()
+    repo, deps, _ = _first_plan(settings)
+    observation = ReplanObservation(
+        incident_id=INCIDENT_ID,
+        edge_statuses=(EdgeStatusEntry(u=998, v=999, key=0, status="blocked"),),
+    )
+
+    assert check_and_replan(observation, deps=deps) == []
+    assert len(repo.plans[INCIDENT_ID]) == 1
+
+
+def test_deactivated_shelter_replans_to_another_shelter() -> None:
+    settings = make_settings()
+    repo, deps, v1 = _first_plan(settings)
+    repo.set_shelter_active("shelter-sh-1", False)
+    states = tuple(
+        ShelterSnapshot(
+            shelter_id=item.shelter_id,
+            occupancy=item.occupancy,
+            usable_capacity=item.usable_capacity,
+            is_active=item.shelter_id != "shelter-sh-1",
+            capacity_source=item.capacity_source,
+        )
+        for item in v1.provenance.shelter_snapshot
+    )
+
+    outcomes = check_and_replan(
+        ReplanObservation(incident_id=INCIDENT_ID, shelter_states=states), deps=deps
+    )
+
+    assert [item.status for item in outcomes] == ["new_version"]
+    stored = repo.latest_plan(INCIDENT_ID)
+    assert stored is not None
+    v2 = IntegratedPlan.model_validate(stored.plan_data)
+    assert v2.status == "pending_review"
+    assert v2.shelter_assignments
+    assert "shelter-sh-1" not in {a.shelter_id for a in v2.shelter_assignments}
+    assert repo.triggers[outcomes[0].trigger_id]["type"] == "shelter_capacity_change"
+
+
+def test_occupancy_jump_crosses_but_an_unchanged_decision_makes_no_version() -> None:
+    settings = make_settings()
+    repo, deps, v1 = _first_plan(settings)
+    repo.update_occupancy("shelter-sh-1", 10)  # 10 % of the usable capacity of 100
+    states = tuple(
+        ShelterSnapshot(
+            shelter_id=item.shelter_id,
+            occupancy=10 if item.shelter_id == "shelter-sh-1" else item.occupancy,
+            usable_capacity=item.usable_capacity,
+            is_active=True,
+            capacity_source=item.capacity_source,
+        )
+        for item in v1.provenance.shelter_snapshot
+    )
+    observation = ReplanObservation(incident_id=INCIDENT_ID, shelter_states=states)
+
+    detected = detect_replan_triggers(observation, v1, settings)
+    assert [item.trigger_type for item in detected] == ["shelter_capacity_change"]
+
+    outcomes = check_and_replan(observation, deps=deps)
+    assert [item.status for item in outcomes] == ["no_change"]
+    assert len(repo.plans[INCIDENT_ID]) == 1

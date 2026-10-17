@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Sequence
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any, get_args
@@ -14,6 +14,7 @@ from shapely.ops import transform as shapely_transform
 from sqlalchemy import Engine, text
 from wildfire_core.clock import Clock
 from wildfire_core.schemas.metadata import Origin
+from wildfire_core.schemas.plan import ShelterSnapshot
 
 DATA_ORIGINS = frozenset(get_args(Origin))
 
@@ -21,6 +22,7 @@ DATA_ORIGINS = frozenset(get_args(Origin))
 # and manual are deferred; ``record_trigger`` rejects them before any SQL.
 PHASE3_TRIGGER_TYPES = frozenset({"perimeter_change", "road_blocked", "shelter_capacity_change"})
 
+_CLOSED = frozenset({"blocked", "unsafe"})
 _METRIC_CRS = 32643  # UTM 43N: metric CRS for this region (Rules 4)
 _TO_METRIC = pyproj.Transformer.from_crs(4326, _METRIC_CRS, always_xy=True).transform
 
@@ -29,7 +31,7 @@ _TO_METRIC = pyproj.Transformer.from_crs(4326, _METRIC_CRS, always_xy=True).tran
 class TriggerDecision:
     crossed: bool
     reason: str
-    details: dict[str, float] = field(default_factory=dict)
+    details: dict[str, Any] = field(default_factory=dict)
 
 
 def evaluate_new_hotspot(count: int, threshold: int) -> TriggerDecision:
@@ -70,6 +72,57 @@ def detect_perimeter_change(
     crossed = iou < iou_threshold or growth > growth_threshold
     reason = "perimeter_change_crossed" if crossed else "perimeter_change_below_threshold"
     return TriggerDecision(crossed, reason, details)
+
+
+def detect_road_blocked(
+    route_edges: Collection[tuple[int, int, int]],
+    statuses: Mapping[tuple[int, int, int], str],
+) -> TriggerDecision:
+    """Crossed when any edge on the plan's routes is now ``blocked`` or ``unsafe``.
+
+    Statuses of edges that no route uses never cross; ``details["edges"]`` lists the affected
+    route edges as ``[u, v, key, status]`` sorted by edge.
+    """
+    affected = sorted(
+        (*edge, statuses[edge]) for edge in set(route_edges) if statuses.get(edge) in _CLOSED
+    )
+    crossed = bool(affected)
+    return TriggerDecision(
+        crossed,
+        "road_blocked_crossed" if crossed else "road_blocked_below_threshold",
+        {"edges": [list(item) for item in affected]},
+    )
+
+
+def detect_shelter_capacity_change(
+    previous: Sequence[ShelterSnapshot],
+    current: Sequence[ShelterSnapshot],
+    *,
+    tolerance_fraction: float,
+) -> TriggerDecision:
+    """Crossed when a shelter the plan considered became inactive or its load moved materially.
+
+    A shelter missing from ``current`` counts as inactive. Occupancy crosses when it moved by at
+    least ``tolerance_fraction`` of the shelter's usable capacity (a zero delta never crosses).
+    Shelters that are new in ``current`` were not considered by the plan and are ignored.
+    """
+    now = {item.shelter_id: item for item in current}
+    changed: list[str] = []
+    for before in previous:
+        after = now.get(before.shelter_id)
+        if before.is_active and (after is None or not after.is_active):
+            changed.append(before.shelter_id)
+        elif after is not None and after.is_active:
+            delta = abs(after.occupancy - before.occupancy)
+            if delta > 0 and delta >= tolerance_fraction * before.usable_capacity:
+                changed.append(before.shelter_id)
+    shelter_ids = sorted(set(changed))
+    crossed = bool(shelter_ids)
+    return TriggerDecision(
+        crossed,
+        "shelter_capacity_change_crossed" if crossed else "shelter_capacity_change_below_threshold",
+        {"shelter_ids": shelter_ids},
+    )
 
 
 @dataclass(frozen=True)

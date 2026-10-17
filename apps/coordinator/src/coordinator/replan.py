@@ -24,6 +24,8 @@ from ingest_worker.triggers import (
     PHASE3_TRIGGER_TYPES,
     TriggerDecision,
     detect_perimeter_change,
+    detect_road_blocked,
+    detect_shelter_capacity_change,
 )
 from pydantic import BaseModel, ConfigDict
 from wildfire_core.config import Settings
@@ -73,6 +75,14 @@ def _json_safe(details: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def _route_edges(plan: IntegratedPlan) -> set[tuple[int, int, int]]:
+    edges: set[tuple[int, int, int]] = set()
+    for route in plan.routes:
+        for index, key in enumerate(route.osm_edge_keys):
+            edges.add((route.osm_node_path[index], route.osm_node_path[index + 1], key))
+    return edges
+
+
 def detect_replan_triggers(
     observation: ReplanObservation, latest_plan: IntegratedPlan, settings: Settings
 ) -> list[DetectedTrigger]:
@@ -89,6 +99,23 @@ def detect_replan_triggers(
         if decision.crossed:
             detected.append(
                 DetectedTrigger("perimeter_change", decision, _json_safe(decision.details))
+            )
+
+    if observation.edge_statuses:
+        statuses = {(item.u, item.v, item.key): item.status for item in observation.edge_statuses}
+        road = detect_road_blocked(_route_edges(latest_plan), statuses)
+        if road.crossed:
+            detected.append(DetectedTrigger("road_blocked", road, _json_safe(road.details)))
+
+    if observation.shelter_states:
+        shelter = detect_shelter_capacity_change(
+            latest_plan.provenance.shelter_snapshot,
+            observation.shelter_states,
+            tolerance_fraction=settings.shelter_capacity_change_fraction,
+        )
+        if shelter.crossed:
+            detected.append(
+                DetectedTrigger("shelter_capacity_change", shelter, _json_safe(shelter.details))
             )
 
     return sorted(detected, key=lambda item: item.trigger_type)
