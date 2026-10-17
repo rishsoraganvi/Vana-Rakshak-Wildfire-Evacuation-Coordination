@@ -338,7 +338,9 @@ def _square_fire_fn(current_half: float, p50_half: float | None, calls: list):
     def fire(cluster, _weather, **_kwargs) -> FireSpreadResult:
         calls.append(cluster.cluster_id)
         lon, lat = cluster.centroid_lon, cluster.centroid_lat
-        current = box(lon - current_half, lat - current_half, lon + current_half, lat + current_half)
+        current = box(
+            lon - current_half, lat - current_half, lon + current_half, lat + current_half
+        )
         p50 = (
             box(lon - p50_half, lat - p50_half, lon + p50_half, lat + p50_half).wkt
             if p50_half is not None

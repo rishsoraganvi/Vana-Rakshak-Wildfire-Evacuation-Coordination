@@ -50,7 +50,7 @@ def run_coordinator(incident_id: str, run_id: str) -> CoordinatorState:
         "hotspots": [],
         "weather_snapshot": None,
         "clusters": [],
-        "fire_result": None,
+        "fire_results": [],
         "routes": [],
         "rationale": "",
         "is_llm_fallback": False,

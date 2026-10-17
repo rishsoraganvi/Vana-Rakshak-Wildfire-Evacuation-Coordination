@@ -10,7 +10,7 @@ class CoordinatorState(TypedDict):
     hotspots: list[dict[str, Any]]
     weather_snapshot: dict[str, Any] | None
     clusters: list[dict[str, Any]]
-    fire_result: dict[str, Any] | None
+    fire_results: list[dict[str, Any]]
     routes: list[dict[str, Any]]
     rationale: str
     is_llm_fallback: bool

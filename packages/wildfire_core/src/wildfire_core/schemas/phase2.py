@@ -121,7 +121,7 @@ class CoordinatorPlan(BaseModel):
     incident_id: str
     run_id: str
     status: Literal["draft", "failed"] = "draft"
-    fire_result: FireSpreadResult
+    fire_results: tuple[FireSpreadResult, ...] = Field(min_length=1)
     weather_snapshot: WeatherSnapshot
     clusters: tuple[HotspotCluster, ...]
     routes: tuple[RouteResult, ...]

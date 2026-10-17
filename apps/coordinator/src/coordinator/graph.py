@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import time
+from collections.abc import Iterable
 from datetime import UTC, datetime
 from functools import lru_cache
 from typing import Any
@@ -14,6 +15,8 @@ from agent_weather.agent import get_weather_snapshot
 from ingest_worker.clustering import cluster_hotspots
 from shapely import wkt
 from shapely.geometry import Point
+from shapely.geometry.base import BaseGeometry
+from shapely.ops import unary_union
 from sqlalchemy import select, text
 from sqlalchemy.engine import Engine
 from wildfire_core.config import Settings, load_settings
@@ -72,6 +75,14 @@ def _aoi_boundary_exit_nodes(
         if node_id not in exits:
             exits.append(node_id)
     return exits
+
+
+def _union_wkt(wkts: Iterable[str]) -> BaseGeometry:
+    """Union of every non-empty WKT geometry; an empty polygon when there are none."""
+    geometries = [geometry for item in wkts if not (geometry := wkt.loads(item)).is_empty]
+    if not geometries:
+        return wkt.loads("POLYGON EMPTY")
+    return unary_union(geometries)
 
 
 def _audit(
@@ -220,21 +231,25 @@ def cluster_hotspots_node(state: CoordinatorState) -> CoordinatorState:
 def run_fire_ca(state: CoordinatorState) -> CoordinatorState:
     started_ms = time.monotonic_ns() // 1_000_000
     if not state["clusters"] or state["weather_snapshot"] is None:
-        state["fire_result"] = None
+        state["fire_results"] = []
         state["warnings"].append("Fire spread skipped because clusters or weather are unavailable")
     else:
         settings = _settings()
-        clusters = [HotspotCluster.model_validate(item) for item in state["clusters"]]
-        cluster = max(clusters, key=lambda item: item.point_count)
-        weather = WeatherSnapshot.model_validate(state["weather_snapshot"])
-        fire_result = compute_fire_spread(
-            cluster,
-            weather,
-            bbox=settings.aoi_bbox,
-            resolution_m=settings.fire_grid_resolution_m,
-            seeds=settings.fire_ensemble_seeds,
+        clusters = sorted(
+            (HotspotCluster.model_validate(item) for item in state["clusters"]),
+            key=lambda item: (-item.point_count, item.cluster_id),
         )
-        state["fire_result"] = fire_result.model_dump(mode="json")
+        weather = WeatherSnapshot.model_validate(state["weather_snapshot"])
+        state["fire_results"] = [
+            compute_fire_spread(
+                cluster,
+                weather,
+                bbox=settings.aoi_bbox,
+                resolution_m=settings.fire_grid_resolution_m,
+                seeds=settings.fire_ensemble_seeds,
+            ).model_dump(mode="json")
+            for cluster in clusters
+        ]
         if weather.is_stale:
             state["warnings"].append("Fire spread used a stale weather snapshot")
 
@@ -242,7 +257,7 @@ def run_fire_ca(state: CoordinatorState) -> CoordinatorState:
         state,
         "run_fire_ca",
         {"cluster_count": len(state["clusters"])},
-        {"fire_result": state["fire_result"]},
+        {"fire_results": state["fire_results"]},
         started_ms,
     )
     return state
@@ -251,7 +266,7 @@ def run_fire_ca(state: CoordinatorState) -> CoordinatorState:
 def compute_route_node(state: CoordinatorState) -> CoordinatorState:
     started_ms = time.monotonic_ns() // 1_000_000
     state["routes"] = []
-    if state["fire_result"] is None:
+    if not state["fire_results"]:
         state["warnings"].append("Routing skipped because the fire spread result is unavailable")
         _audit(state, "compute_route", {}, {"routes": []}, started_ms)
         return state
@@ -263,14 +278,16 @@ def compute_route_node(state: CoordinatorState) -> CoordinatorState:
             settings.osm_cache_path,
             (bbox.north, bbox.south, bbox.east, bbox.west),
         )
-        fire_result = FireSpreadResult.model_validate(state["fire_result"])
+        fire_results = [FireSpreadResult.model_validate(item) for item in state["fire_results"]]
+        union_current = _union_wkt(result.current_perimeter_wkt for result in fire_results)
+        union_p50 = _union_wkt(result.p50_1h_wkt for result in fire_results)
         weighted_graph = apply_fire_penalties(
             graph,
-            fire_result.current_perimeter_wkt,
-            fire_result.p50_1h_wkt,
+            union_current.wkt,
+            union_p50.wkt,
             penalty_near=settings.route_fire_penalty_near,
         )
-        current_perimeter = wkt.loads(fire_result.current_perimeter_wkt)
+        current_perimeter = union_current
         exit_nodes = _aoi_boundary_exit_nodes(
             graph,
             (bbox.west, bbox.south, bbox.east, bbox.north),
@@ -323,14 +340,20 @@ def compute_route_node(state: CoordinatorState) -> CoordinatorState:
     except Exception as error:
         state["warnings"].append(f"Route computation unavailable: {type(error).__name__}")
 
-    _audit(state, "compute_route", {}, {"routes": state["routes"]}, started_ms)
+    _audit(
+        state,
+        "compute_route",
+        {"fire_cluster_ids": [item["cluster_id"] for item in state["fire_results"]]},
+        {"routes": state["routes"]},
+        started_ms,
+    )
     return state
 
 
 def generate_rationale_node(state: CoordinatorState) -> CoordinatorState:
     started_ms = time.monotonic_ns() // 1_000_000
     settings = _settings()
-    if state["fire_result"] is None or state["weather_snapshot"] is None:
+    if not state["fire_results"] or state["weather_snapshot"] is None:
         state["rationale"] = (
             "[DETERMINISTIC FALLBACK] Fire or weather data unavailable. Human review required."
         )
@@ -346,7 +369,7 @@ def generate_rationale_node(state: CoordinatorState) -> CoordinatorState:
         }
     else:
         result = generate_rationale(
-            [FireSpreadResult.model_validate(state["fire_result"])],
+            [FireSpreadResult.model_validate(item) for item in state["fire_results"]],
             WeatherSnapshot.model_validate(state["weather_snapshot"]),
             [RouteResult.model_validate(item) for item in state["routes"]],
             settings,
@@ -358,7 +381,11 @@ def generate_rationale_node(state: CoordinatorState) -> CoordinatorState:
     _audit(
         state,
         "generate_rationale",
-        {"fire_available": state["fire_result"] is not None, "route_count": len(state["routes"])},
+        {
+            "fire_available": bool(state["fire_results"]),
+            "fire_result_count": len(state["fire_results"]),
+            "route_count": len(state["routes"]),
+        },
         {"rationale": state["rationale"], "is_llm_fallback": state["is_llm_fallback"]},
         started_ms,
         model_metadata=model_metadata,
@@ -368,7 +395,7 @@ def generate_rationale_node(state: CoordinatorState) -> CoordinatorState:
 
 def assemble_plan(state: CoordinatorState) -> CoordinatorState:
     started_ms = time.monotonic_ns() // 1_000_000
-    if state["fire_result"] is None or state["weather_snapshot"] is None:
+    if not state["fire_results"] or state["weather_snapshot"] is None:
         state["error"] = state["error"] or "Cannot persist a draft without fire and weather results"
         _audit(state, "assemble_plan", {}, {"error": state["error"]}, started_ms)
         return state
@@ -376,7 +403,7 @@ def assemble_plan(state: CoordinatorState) -> CoordinatorState:
     plan = CoordinatorPlan(
         incident_id=state["incident_id"],
         run_id=state["run_id"],
-        fire_result=FireSpreadResult.model_validate(state["fire_result"]),
+        fire_results=tuple(FireSpreadResult.model_validate(item) for item in state["fire_results"]),
         weather_snapshot=WeatherSnapshot.model_validate(state["weather_snapshot"]),
         clusters=tuple(HotspotCluster.model_validate(item) for item in state["clusters"]),
         routes=tuple(RouteResult.model_validate(item) for item in state["routes"]),
