@@ -21,14 +21,16 @@ import uuid
 from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any, Protocol
 from uuid import UUID
 
 from agent_shelter.registry import fetch_shelters, usable_capacity
 from agent_weather.agent import _STALE_AFTER_MIN, DEFAULT_MAX_DISTANCE_KM, get_weather_snapshot
+from ingest_worker.triggers import PHASE3_TRIGGER_TYPES, RecordedTrigger, record_trigger
 from sqlalchemy import Engine, bindparam, text
+from wildfire_core.clock import SimClock
 from wildfire_core.db.repositories import current_edge_statuses
 from wildfire_core.schemas.phase2 import WeatherSnapshot
 from wildfire_core.schemas.plan import IntegratedPlan, SettlementRecord, ShelterRecord
@@ -130,6 +132,16 @@ class PlanningRepository(Protocol):
     def flush_audit(self, entries: Sequence[dict[str, Any]]) -> None: ...
 
     def mark_trigger_handled(self, trigger_id: str, handled_entry_id: str) -> None: ...
+
+    def record_trigger(
+        self,
+        incident_id: str,
+        trigger_type: str,
+        details: Mapping[str, Any],
+        detected_at: datetime,
+        *,
+        debounce_s: int,
+    ) -> RecordedTrigger: ...
 
 
 # --------------------------------------------------------------------------------------------
@@ -579,6 +591,25 @@ class SqlPlanningRepository:
             state_version=new_state_version,
         )
 
+    def record_trigger(
+        self,
+        incident_id: str,
+        trigger_type: str,
+        details: Mapping[str, Any],
+        detected_at: datetime,
+        *,
+        debounce_s: int,
+    ) -> RecordedTrigger:
+        """Debounced re-plan trigger; the caller's clock reading is the detection time."""
+        return record_trigger(
+            self._engine,
+            incident_id=incident_id,
+            trigger_type=trigger_type,
+            details=dict(details),
+            clock=SimClock(detected_at),
+            debounce_s=debounce_s,
+        )
+
     def flush_audit(self, entries: Sequence[dict[str, Any]]) -> None:
         if not entries:
             return
@@ -680,6 +711,8 @@ class InMemoryPlanningRepository:
         trigger = trigger_id or str(uuid.uuid4())
         self.triggers[trigger] = {
             "incident_id": incident_id,
+            "type": "new_hotspot",
+            "detected_at": None,
             "hotspot_ids": ids,
             "coalesced": coalesced,
             "handled_entry_id": None,
@@ -722,6 +755,11 @@ class InMemoryPlanningRepository:
     def set_edge_status(self, u: int, v: int, key: int, status: str) -> None:
         self.edge_status_rows[(u, v, key)] = status
 
+    def set_shelter_active(self, shelter_id: str, is_active: bool) -> None:
+        self.shelter_rows[shelter_id] = self.shelter_rows[shelter_id].model_copy(
+            update={"is_active": is_active}
+        )
+
     def update_occupancy(self, shelter_id: str, occupancy: int) -> None:
         self.shelter_rows[shelter_id] = self.shelter_rows[shelter_id].model_copy(
             update={"occupancy": occupancy}
@@ -736,7 +774,11 @@ class InMemoryPlanningRepository:
     def incident_hotspots(self, incident_id: str) -> list[dict[str, Any]]:
         wanted: set[str] = set()
         for trigger in self.triggers.values():
-            if trigger["incident_id"] == incident_id and not trigger["coalesced"]:
+            if (
+                trigger["incident_id"] == incident_id
+                and trigger["type"] == "new_hotspot"
+                and not trigger["coalesced"]
+            ):
                 wanted.update(trigger["hotspot_ids"])
         rows = [self.hotspot_rows[item] for item in wanted if item in self.hotspot_rows]
         rows.sort(key=lambda row: (row["acq_datetime"], row["id"]))
@@ -880,6 +922,42 @@ class InMemoryPlanningRepository:
             if entry["entry_id"] not in known:  # ON CONFLICT (id) DO NOTHING
                 self.audit_entries.append(dict(entry))
                 known.add(entry["entry_id"])
+
+    def record_trigger(
+        self,
+        incident_id: str,
+        trigger_type: str,
+        details: Mapping[str, Any],
+        detected_at: datetime,
+        *,
+        debounce_s: int,
+    ) -> RecordedTrigger:
+        if trigger_type not in PHASE3_TRIGGER_TYPES:
+            raise ValueError(f"trigger_type {trigger_type!r} is not accepted for re-planning")
+        self._incident(incident_id)
+        cutoff = detected_at - timedelta(seconds=debounce_s)
+        leaders = [
+            (item["detected_at"], trigger_id)
+            for trigger_id, item in self.triggers.items()
+            if item["incident_id"] == incident_id
+            and item["type"] == trigger_type
+            and not item["coalesced"]
+            and item["detected_at"] is not None
+            and cutoff < item["detected_at"] <= detected_at
+        ]
+        leader = min(leaders)[1] if leaders else None
+        trigger_id = str(uuid.uuid4())
+        self.triggers[trigger_id] = {
+            "incident_id": incident_id,
+            "type": trigger_type,
+            "detected_at": detected_at,
+            "details": dict(details),
+            "hotspot_ids": [],
+            "coalesced": leader is not None,
+            "coalesced_into": leader,
+            "handled_entry_id": None,
+        }
+        return RecordedTrigger(trigger_id=trigger_id, coalesced_into=leader)
 
     def mark_trigger_handled(self, trigger_id: str, handled_entry_id: str) -> None:
         if trigger_id not in self.triggers:
