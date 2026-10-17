@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 current_phase: 03
 status: executing
-stopped_at: Completed 03-05-PLAN.md
-last_updated: "2026-10-17T14:10:00.000Z"
-state_head: 79f8ec3ec6801197c2f26b77352eee3a66fb7c0a
+stopped_at: Completed 03-07-PLAN.md
+last_updated: "2026-10-17T13:59:14.353Z"
+state_head: 045e79cb10c9c527eeec8ad5e94e44c52c9a3fb8
 progress:
   total_phases: 6
   completed_phases: 2
   total_plans: 24
-  completed_plans: 17
-  percent: 42
+  completed_plans: 18
+  percent: 50
 current_phase_name: Capacity-Aware Coordinated Planning
 ---
 
@@ -28,10 +28,10 @@ See: `.planning/PROJECT.md` (updated 2026-10-01)
 Current Phase: 03
 
 - Phase: 3 of 6 (executing)
-- Current Plan: 6 of 12
-- Status: Plan 03-05 complete; Phase 2 verification human_needed (2 non-blocking UAT items)
-- Progress: 42% of Phase 3 (5/12 plans)
-- Last activity: Plan 03-05 executed - routing upgraded: per-horizon fire costs on a single STRtree pass, edge-status blocking, settlement-to-shelter cost matrix on the nearest-horizon rule, per-edge exposure evaluation, lazy k=3 Yen on a collapsed DiGraph, BPR congestion with MSA, load-only graph loader (GraphNotBuiltError) and scripts/build_osm_graph.py (written and unit-tested, NOT run). Previously: Plan 03-04 executed - migration 0006 applied (head 0006: shelters, shelter_occupancy, failed status, plan_versions provenance + immutability trigger, road_edge_status), labelled synthetic seed (20 shelters, 10 settlements) loaded, shelter registry with exact usable capacity, perimeter exclusion and atomic update_occupancy. Previously: Plan 03-03 executed - WR-03 fixed (parse_open_meteo splits observations from forecasts with a required origin; hotspot-trigger incidents carry the real origin). Previously: Plan 03-02 executed - Phase 3 contracts (IntegratedPlan S5/D-11 invariants, ToolResult), shared nearest-horizon rule, footprint unions, validated Phase 3 config block
+- Current Plan: 6 of 12 (03-06 not yet executed; 03-07 done out of order, it does not depend on 03-06)
+- Status: Plan 03-07 complete; Phase 2 verification human_needed (2 non-blocking UAT items)
+- Progress: 50% of Phase 3 (6/12 plans)
+- Last activity: Plan 03-07 executed - plan assembly: finalize_plan (S5 gate, failed vs pending_review, as_failed), strict V8 grounding with template replacement, build_freshness/build_provenance, generate_plan_rationale and enum-only choose_fix_strategy with strict json_schema (all Groq calls mocked in tests). Previously: Plan 03-05 executed - routing upgraded: per-horizon fire costs on a single STRtree pass, edge-status blocking, settlement-to-shelter cost matrix on the nearest-horizon rule, per-edge exposure evaluation, lazy k=3 Yen on a collapsed DiGraph, BPR congestion with MSA, load-only graph loader (GraphNotBuiltError) and scripts/build_osm_graph.py (written and unit-tested, NOT run). Previously: Plan 03-04 executed - migration 0006 applied (head 0006: shelters, shelter_occupancy, failed status, plan_versions provenance + immutability trigger, road_edge_status), labelled synthetic seed (20 shelters, 10 settlements) loaded, shelter registry with exact usable capacity, perimeter exclusion and atomic update_occupancy. Previously: Plan 03-03 executed - WR-03 fixed (parse_open_meteo splits observations from forecasts with a required origin; hotspot-trigger incidents carry the real origin). Previously: Plan 03-02 executed - Phase 3 contracts (IntegratedPlan S5/D-11 invariants, ToolResult), shared nearest-horizon rule, footprint unions, validated Phase 3 config block
 
 ## Decisions and Constraints
 
@@ -70,8 +70,8 @@ Complete the 2 Phase 2 UAT items with `/gsd-verify-work 2` (02-UAT.md). Operator
 
 ## Session
 
-**Last session:** 2026-10-17T14:10:00.000Z
-**Stopped at:** Completed 03-05-PLAN.md
+**Last session:** 2026-10-17T13:59:13.301Z
+**Stopped at:** Completed 03-07-PLAN.md
 **Resume file:** None
 
 ## Performance Metrics
@@ -88,6 +88,7 @@ Complete the 2 Phase 2 UAT items with `/gsd-verify-work 2` (02-UAT.md). Operator
 | Phase 03 P02 | 35min | 3 tasks | 10 files |
 | Phase 03 P03 | 25min | 2 tasks | 7 files |
 | Phase 03 P05 | 50min | 3 tasks | 12 files |
+| Phase 03 P07 | 40min | 3 tasks | 14 files |
 
 ## Decisions
 
@@ -96,6 +97,7 @@ Complete the 2 Phase 2 UAT items with `/gsd-verify-work 2` (02-UAT.md). Operator
 - [Phase 2]: 02-06: generate_rationale audit rows carry model_metadata (JSON text at flush); Groq called only when llm_enabled + provider groq + model + key; default model openai/gpt-oss-20b (config); blank env vars treated as unset; Groq prompt carries compact metrics (no WKT) to stay under on-demand TPM
 - [Phase 2]: 02-07: fire_results (one per cluster) replaces singular fire_result; all routing penalised by union of every cluster current/P50 perimeters; origin = nearest node outside union current perimeter; blocked fallback keeps least-exposure route; replay route on 3-node stub is truthfully blocked
 - [Phase 3]: 03-01: agent_shelter.match_groups_to_shelters uses integer-decisecond nx.min_cost_flow with a diagnostic U sink; uv.lock revision header kept at 5 by hand (local uv 0.12.5 writes 3, CI pins 0.8.17); types-networkx not installed locally so mypy was verified with --ignore-missing-imports
+- [Phase 3]: 03-07: V8 strips plan names before scanning (a registry name inside a longer plan name is not a violation); finalize fails closed if the deterministic template ever fails V8; choose_fix_strategy returns out_of_menu without a repair call, repair retry only for invalid JSON/shape; fix-menu payload is loop index + allowed + Vn:code counts and rejects ids/names with ValueError
 - [Phase 3]: 03-02: IntegratedPlan enforces S5 (pending_review needs V1..V8 in order, none failing) and D-11 (failed plan has no routes/assignments, needs a reason) in the schema; freshness/provenance required; nearest_horizon_h ties go later; Settings rejects any fix_menu_order other than next_path/rematch/split
 - [Phase 3]: 03-03: WR-03 fixed - parse_open_meteo requires an origin and sets is_forecast = valid_time > issued_at; record_new_hotspot_trigger requires a validated origin bound via CAST(:origin AS data_origin); both allow-lists derive from wildfire_core Origin
 - [Phase 3]: 03-05: horizon costs come from one shapely STRtree per perimeter (no per-edge loops); cost matrix picks the horizon from free-flow time via wildfire_core nearest_horizon_h, evaluate_path from end-of-edge arrival (same rule as V3); load_graph never downloads and the real OSM build is the human-run scripts/build_osm_graph.py (plan 03-12 checkpoint); graph builds fall back to a 30 km/h speed only when the extract has no maxspeed tags
