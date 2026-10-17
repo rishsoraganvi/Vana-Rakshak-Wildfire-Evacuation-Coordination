@@ -6,6 +6,7 @@ import osmnx as ox
 import pytest
 from agent_routing import apply_fire_penalties, compute_route, load_or_download_graph, nearest_node
 from agent_routing import graph as graph_module
+from shapely.geometry import LineString
 
 
 def make_graph() -> nx.MultiDiGraph:
@@ -117,6 +118,72 @@ def test_apply_fire_penalties_safe_outside_perimeters() -> None:
 
     assert penalized_graph[1][2][7]["penalised_cost"] == 10.0
     assert penalized_graph[2][3][8]["penalised_cost"] == 10.0
+
+
+def _square(x0: float, y0: float, x1: float, y1: float) -> str:
+    return f"POLYGON (({x0} {y0}, {x1} {y0}, {x1} {y1}, {x0} {y1}, {x0} {y0}))"
+
+
+def test_apply_fire_penalties_blocks_edge_with_endpoint_inside_perimeter() -> None:
+    perimeter = _square(-0.1, -0.1, 0.2, 0.1)  # contains node 1, not the (1,2) midpoint
+
+    penalized = apply_fire_penalties(make_graph(), perimeter, "POLYGON EMPTY")
+
+    assert penalized[1][2][7]["penalised_cost"] == inf
+    assert penalized[2][3][8]["penalised_cost"] == 10.0
+
+
+def test_apply_fire_penalties_blocks_edge_crossing_perimeter_with_midpoint_outside() -> None:
+    perimeter = _square(0.1, -0.5, 0.3, 0.5)  # strip crossing edge (1,2) away from midpoint
+
+    penalized = apply_fire_penalties(make_graph(), perimeter, "POLYGON EMPTY")
+
+    assert penalized[1][2][7]["penalised_cost"] == inf
+
+
+def test_apply_fire_penalties_blocks_edge_touching_perimeter_boundary() -> None:
+    perimeter = "POLYGON ((1 0, 1.1 0.3, 0.9 0.3, 1 0))"  # touches node 2 at the vertex only
+
+    penalized = apply_fire_penalties(make_graph(), perimeter, "POLYGON EMPTY")
+
+    assert penalized[1][2][7]["penalised_cost"] == inf
+    assert penalized[2][3][8]["penalised_cost"] == inf
+
+
+def test_apply_fire_penalties_uses_edge_geometry_when_present() -> None:
+    graph = make_graph()
+    graph[2][3][8]["geometry"] = LineString([(1, 0), (1.5, 0.5), (2, 0)])
+    p50 = _square(1.4, 0.4, 1.6, 0.6)  # the straight chord never touches this
+
+    penalized = apply_fire_penalties(graph, "POLYGON EMPTY", p50)
+
+    assert penalized[2][3][8]["penalised_cost"] == 50.0
+    assert penalized[1][2][7]["penalised_cost"] == 10.0
+
+
+def test_bundled_fixture_route_through_active_fire_is_not_safe() -> None:
+    fixture_path = (
+        Path(__file__).resolve().parents[4]
+        / "tests"
+        / "fixtures"
+        / "osm"
+        / "bandipur_stub.graphml"
+    )
+    graph = load_or_download_graph(fixture_path, (11.74, 11.70, 76.66, 76.62))
+    perimeter = _square(76.6366313, 11.7166313, 76.6433687, 11.7233687)
+
+    penalized = apply_fire_penalties(graph, perimeter, "POLYGON EMPTY")
+    route = compute_route(
+        penalized,
+        1000002,
+        1000003,
+        group_id="g",
+        origin_cluster_id="c",
+    )
+
+    assert route is not None
+    assert route.safety_classification == "blocked"
+    assert route.fire_penalty_edges
 
 
 def test_load_or_download_graph_uses_cache(tmp_path: Path, monkeypatch) -> None:
