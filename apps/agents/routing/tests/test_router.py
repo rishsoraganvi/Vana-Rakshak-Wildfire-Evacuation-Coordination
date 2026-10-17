@@ -4,7 +4,13 @@ from pathlib import Path
 import networkx as nx
 import osmnx as ox
 import pytest
-from agent_routing import apply_fire_penalties, compute_route, load_or_download_graph, nearest_node
+from agent_routing import (
+    apply_fire_penalties,
+    compute_route,
+    load_or_download_graph,
+    nearest_node,
+    nearest_node_outside,
+)
 from agent_routing import graph as graph_module
 from shapely.geometry import LineString
 
@@ -265,3 +271,105 @@ def test_nearest_node_passes_longitude_as_x(monkeypatch) -> None:
 
     assert result == 42
     assert calls == {"X": 76.64, "Y": 11.72}
+
+
+def _add_edge(
+    graph: nx.MultiDiGraph,
+    u: int,
+    v: int,
+    cost: float,
+    *,
+    key: int = 0,
+    travel_time: float | None = None,
+    length: float | None = None,
+) -> None:
+    tt = cost if travel_time is None else travel_time
+    graph.add_edge(
+        u,
+        v,
+        key=key,
+        length=length if length is not None else tt,
+        travel_time=tt,
+        penalised_cost=cost,
+    )
+
+
+def test_compute_route_least_blocked_fallback_minimises_blocked_exposure() -> None:
+    graph = nx.MultiDiGraph()
+    _add_edge(graph, 1, 2, inf, travel_time=100.0, length=100.0)
+    _add_edge(graph, 1, 3, inf, travel_time=10.0, length=10.0)
+    _add_edge(graph, 2, 4, 10.0, travel_time=10.0, length=10.0)
+    _add_edge(graph, 3, 4, 10.0, travel_time=10.0, length=10.0)
+
+    route = compute_route(graph, 1, 4, group_id="g", origin_cluster_id="c")
+
+    assert route is not None
+    assert route.osm_node_path == (1, 3, 4)
+    assert route.safety_classification == "blocked"
+    assert len(route.fire_penalty_edges) == 1
+
+
+def test_compute_route_prefers_unblocked_detour() -> None:
+    graph = nx.MultiDiGraph()
+    _add_edge(graph, 1, 2, inf, travel_time=10.0)
+    _add_edge(graph, 2, 4, 10.0, travel_time=10.0)
+    _add_edge(graph, 1, 3, 50.0, travel_time=50.0)
+    _add_edge(graph, 3, 4, 50.0, travel_time=50.0)
+
+    route = compute_route(graph, 1, 4, group_id="g", origin_cluster_id="c")
+
+    assert route is not None
+    assert route.osm_node_path == (1, 3, 4)
+    assert route.safety_classification == "safe"
+
+
+def test_compute_route_mixed_parallel_edges_uses_finite_edge() -> None:
+    graph = nx.MultiDiGraph()
+    _add_edge(graph, 1, 2, inf, key=0, travel_time=10.0)
+    _add_edge(graph, 1, 2, 20.0, key=1, travel_time=20.0)
+
+    route = compute_route(graph, 1, 2, group_id="g", origin_cluster_id="c")
+
+    assert route is not None
+    assert route.safety_classification != "blocked"
+    assert 0 not in route.fire_penalty_edges
+
+
+def _node_graph() -> nx.MultiDiGraph:
+    graph = nx.MultiDiGraph()
+    graph.add_node(1, x=0.0, y=0.0)
+    graph.add_node(2, x=0.1, y=0.0)
+    graph.add_node(3, x=0.3, y=0.0)
+    return graph
+
+
+def test_nearest_node_outside_skips_covered_nodes() -> None:
+    perimeter = _square(-0.05, -0.05, 0.05, 0.05)
+
+    assert nearest_node_outside(_node_graph(), 0.0, 0.0, perimeter) == 2
+
+
+def test_nearest_node_outside_empty_perimeter_returns_nearest() -> None:
+    assert nearest_node_outside(_node_graph(), 0.0, 0.0, "POLYGON EMPTY") == 1
+
+
+def test_nearest_node_outside_returns_none_when_all_covered() -> None:
+    perimeter = _square(-1.0, -1.0, 1.0, 1.0)
+
+    assert nearest_node_outside(_node_graph(), 0.0, 0.0, perimeter) is None
+
+
+def test_nearest_node_outside_boundary_counts_as_covered() -> None:
+    perimeter = _square(-0.05, -0.05, 0.1, 0.05)  # node 2 sits on the boundary
+
+    assert nearest_node_outside(_node_graph(), 0.0, 0.0, perimeter) == 3
+
+
+def test_nearest_node_outside_ties_go_to_smallest_id() -> None:
+    graph = nx.MultiDiGraph()
+    graph.add_node(5, x=0.2, y=0.0)
+    graph.add_node(3, x=-0.2, y=0.0)
+    graph.add_node(9, x=0.0, y=0.0)
+    perimeter = _square(-0.05, -0.05, 0.05, 0.05)
+
+    assert nearest_node_outside(graph, 0.0, 0.0, perimeter) == 3

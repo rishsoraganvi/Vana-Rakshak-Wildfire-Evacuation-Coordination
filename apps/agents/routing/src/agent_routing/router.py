@@ -1,17 +1,78 @@
 from __future__ import annotations
 
-from math import inf
+from collections.abc import Callable
+from math import cos, inf, isfinite, radians
 from typing import Any, Literal
 
 import networkx as nx
 import osmnx as ox
+from shapely import wkt
+from shapely.geometry import Point
 from wildfire_core.schemas.phase2 import RouteResult
+
+# An infinite penalty (D-06) cannot be ranked by Dijkstra. When every path is
+# blocked, blocked edges are weighted by this factor x travel_time so the
+# least-exposure path is chosen deterministically.
+BLOCKED_FALLBACK_COST_FACTOR = 1_000_000.0
+
+_WeightFn = Callable[[int, int, dict[Any, dict[str, Any]]], float | None]
 
 
 def nearest_node(
     graph: nx.MultiDiGraph[int, dict[str, Any], dict[str, Any]], lat: float, lon: float
 ) -> int:
     return int(ox.nearest_nodes(graph, X=lon, Y=lat))
+
+
+def nearest_node_outside(
+    graph: nx.MultiDiGraph[int, dict[str, Any], dict[str, Any]],
+    lat: float,
+    lon: float,
+    perimeter_wkt: str,
+) -> int | None:
+    """Closest node not covered by the perimeter (boundary counts as covered).
+
+    Ties go to the smallest node id. Returns None when every node is covered.
+    """
+    perimeter = wkt.loads(perimeter_wkt)
+    lon_scale = cos(radians(lat))
+    best: tuple[float, int] | None = None
+    for node, data in graph.nodes(data=True):
+        x = float(data["x"])
+        y = float(data["y"])
+        if not perimeter.is_empty and perimeter.covers(Point(x, y)):
+            continue
+        distance = ((x - lon) * lon_scale) ** 2 + (y - lat) ** 2
+        candidate = (distance, int(node))
+        if best is None or candidate < best:
+            best = candidate
+    return None if best is None else best[1]
+
+
+def _edge_cost(attr: dict[str, Any], weight: str, *, fallback: bool) -> float | None:
+    cost = float(attr.get(weight, 1.0))
+    if isfinite(cost):
+        return cost
+    if not fallback:
+        return None
+    return BLOCKED_FALLBACK_COST_FACTOR * max(float(attr["travel_time"]), 1.0)
+
+
+def _unblocked_weight(weight: str) -> _WeightFn:
+    def weight_fn(_u: int, _v: int, parallel_edges: dict[Any, dict[str, Any]]) -> float | None:
+        costs = [_edge_cost(attr, weight, fallback=False) for attr in parallel_edges.values()]
+        finite = [cost for cost in costs if cost is not None]
+        return min(finite) if finite else None
+
+    return weight_fn
+
+
+def _least_blocked_weight(weight: str) -> _WeightFn:
+    def weight_fn(_u: int, _v: int, parallel_edges: dict[Any, dict[str, Any]]) -> float | None:
+        costs = [_edge_cost(attr, weight, fallback=True) for attr in parallel_edges.values()]
+        return min(cost for cost in costs if cost is not None)
+
+    return weight_fn
 
 
 def compute_route(
@@ -27,10 +88,21 @@ def compute_route(
     if (origin_cluster_id is None) == (origin_settlement_id is None):
         raise ValueError("exactly one route origin identifier is required")
 
+    # Phase 1: hide blocked (inf) edges so Dijkstra ranks every unblocked path.
+    fallback = False
     try:
-        node_path = nx.dijkstra_path(graph, origin_node, dest_node, weight=weight)
+        node_path = nx.dijkstra_path(
+            graph, origin_node, dest_node, weight=_unblocked_weight(weight)
+        )
     except nx.NetworkXNoPath:
-        return None
+        # Phase 2: no unblocked path; return the least-blocked path.
+        fallback = True
+        try:
+            node_path = nx.dijkstra_path(
+                graph, origin_node, dest_node, weight=_least_blocked_weight(weight)
+            )
+        except nx.NetworkXNoPath:
+            return None
 
     if len(node_path) < 2:
         return None
@@ -40,10 +112,14 @@ def compute_route(
         parallel_edges = graph.get_edge_data(origin, destination)
         if not parallel_edges:
             raise RuntimeError(f"Dijkstra path contains missing edge: {origin} -> {destination}")
-        edge_key, edge_data = min(
-            parallel_edges.items(),
-            key=lambda item: float(item[1].get(weight, 1.0)),
-        )
+        candidates = [
+            (cost, item)
+            for item in parallel_edges.items()
+            if (cost := _edge_cost(item[1], weight, fallback=fallback)) is not None
+        ]
+        if not candidates:
+            raise RuntimeError(f"Dijkstra path hop has no usable edge: {origin} -> {destination}")
+        _, (edge_key, edge_data) = min(candidates, key=lambda candidate: candidate[0])
         if not isinstance(edge_key, int):
             raise TypeError(f"OSM edge key must be an integer, got {type(edge_key).__name__}")
         penalized_cost = float(edge_data[weight])
