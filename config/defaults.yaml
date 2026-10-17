@@ -22,6 +22,49 @@ fire_ensemble_seeds:
 fire_grid_resolution_m: 250
 dbscan_eps_deg: 0.01
 dbscan_min_samples: 3
+# route_fire_penalty_near is superseded by route_p50_mult for Phase 3 routing (read by Phase 2 code until 03-10)
 route_fire_penalty_near: 5.0
 llm_rationale_max_tokens: 400
 llm_request_timeout_s: 30
+
+# Phase 3 additions
+shelter_usable_factor: 0.6
+shelter_exclusion_buffer_m: 1000
+route_p50_mult: 10.0
+route_p90_mult: 3.0
+k_paths: 3
+k_paths_max_leg_s: 5.0
+max_snap_distance_m: 2000
+bpr_alpha: 0.15
+bpr_beta: 4.0
+persons_per_vehicle: 4.0
+evac_window_h: 2.0
+congestion_passes: 3
+lane_capacity_vph:
+  motorway: 1800
+  trunk: 1600
+  primary: 1400
+  secondary: 1100
+  tertiary: 900
+  default: 600
+link_capacity_factor: 0.8
+conflict_max_loops: 3
+fix_menu_order:
+  - next_path
+  - rematch
+  - split
+trigger_debounce_s: 300
+perimeter_iou_threshold: 0.8
+perimeter_growth_threshold: 0.25
+shelter_capacity_change_fraction: 0.10
+pilot_center_lat: 11.72
+pilot_center_lon: 76.64
+pilot_buffer_m: 10000
+plan_valid_for_min: 60
+specialist_timeout_s: 60
+stale_firms_min: 180
+weather_max_distance_km: 50.0
+llm_control_max_tokens: 256
+llm_control_temperature: 0.0
+shelters_seed_path: config/seed/shelters_bandipur.csv
+settlements_seed_path: config/seed/settlements_bandipur.csv

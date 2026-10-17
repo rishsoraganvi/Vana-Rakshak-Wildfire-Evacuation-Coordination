@@ -58,14 +58,83 @@ class Settings(BaseModel):
     fire_grid_resolution_m: int = 250
     dbscan_eps_deg: float = 0.01
     dbscan_min_samples: int = 3
+    # Superseded by route_p50_mult for Phase 3 routing; Phase 2 code reads it until plan 03-10.
     route_fire_penalty_near: float = 5.0
     llm_rationale_max_tokens: int = 400
     llm_request_timeout_s: int = 30
+
+    # Phase 3 additions
+    shelter_usable_factor: float = 0.6
+    shelter_exclusion_buffer_m: int = 1000
+    route_p50_mult: float = 10.0
+    route_p90_mult: float = 3.0
+    k_paths: int = 3
+    k_paths_max_leg_s: float = 5.0
+    max_snap_distance_m: int = 2000
+    bpr_alpha: float = 0.15
+    bpr_beta: float = 4.0
+    persons_per_vehicle: float = 4.0
+    evac_window_h: float = 2.0
+    congestion_passes: int = 3
+    lane_capacity_vph: dict[str, int] = Field(
+        default_factory=lambda: {
+            "motorway": 1800,
+            "trunk": 1600,
+            "primary": 1400,
+            "secondary": 1100,
+            "tertiary": 900,
+            "default": 600,
+        }
+    )
+    link_capacity_factor: float = 0.8
+    conflict_max_loops: int = 3
+    fix_menu_order: tuple[str, ...] = ("next_path", "rematch", "split")
+    trigger_debounce_s: int = 300
+    perimeter_iou_threshold: float = 0.8
+    perimeter_growth_threshold: float = 0.25
+    shelter_capacity_change_fraction: float = 0.10
+    pilot_center_lat: float = 11.72
+    pilot_center_lon: float = 76.64
+    pilot_buffer_m: int = 10000
+    plan_valid_for_min: int = 60
+    specialist_timeout_s: int = 60
+    stale_firms_min: int = 180
+    weather_max_distance_km: float = 50.0
+    llm_control_max_tokens: int = 256
+    llm_control_temperature: float = 0.0
+    shelters_seed_path: Path = Path("config/seed/shelters_bandipur.csv")
+    settlements_seed_path: Path = Path("config/seed/settlements_bandipur.csv")
 
     @field_validator("aoi_bbox", mode="before")
     @classmethod
     def parse_bbox(cls, value: Any) -> Any:
         return BBox.from_value(value) if isinstance(value, (str, list, tuple)) else value
+
+    @model_validator(mode="after")
+    def validate_phase3_coefficients(self) -> Settings:
+        if not 0 < self.shelter_usable_factor <= 1:
+            raise ValueError("shelter_usable_factor must be in (0, 1]")
+        if not self.route_p50_mult >= self.route_p90_mult >= 1:
+            raise ValueError("route multipliers must satisfy p50 >= p90 >= 1")
+        if not 1 <= self.k_paths <= 5:
+            raise ValueError("k_paths must be between 1 and 5")
+        if not 2 <= self.congestion_passes <= 3:
+            raise ValueError("congestion_passes must be 2 or 3 (D-08)")
+        if not 1 <= self.conflict_max_loops <= 3:
+            raise ValueError("conflict_max_loops must be between 1 and 3 (TechSpec 6.2)")
+        if sorted(self.fix_menu_order) != ["next_path", "rematch", "split"]:
+            raise ValueError("fix_menu_order must be exactly next_path, rematch and split (D-09)")
+        if "default" not in self.lane_capacity_vph:
+            raise ValueError("lane_capacity_vph needs a 'default' key")
+        if self.trigger_debounce_s < 0:
+            raise ValueError("trigger_debounce_s must be >= 0")
+        if not 0 < self.perimeter_iou_threshold <= 1:
+            raise ValueError("perimeter_iou_threshold must be in (0, 1]")
+        if self.persons_per_vehicle <= 0 or self.evac_window_h <= 0:
+            raise ValueError("persons_per_vehicle and evac_window_h must be positive")
+        if not 0 <= self.llm_control_temperature <= 0.2:
+            raise ValueError("llm_control_temperature must be in [0, 0.2] (Rules 3)")
+        return self
 
     def safe_projection(self) -> dict[str, Any]:
         return {
@@ -109,6 +178,8 @@ def load_settings(config_path: Path | None = None) -> Settings:
         values["firms_sources"] = tuple(values["firms_sources"])
     if isinstance(values.get("fire_ensemble_seeds"), list):
         values["fire_ensemble_seeds"] = tuple(values["fire_ensemble_seeds"])
+    if isinstance(values.get("fix_menu_order"), list):
+        values["fix_menu_order"] = tuple(values["fix_menu_order"])
     for env_name, field_name in _ENV_MAP.items():
         if env_name not in os.environ:
             continue
