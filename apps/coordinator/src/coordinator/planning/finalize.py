@@ -7,15 +7,17 @@ rationale text is replaced by the deterministic template without blocking the pl
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
-from datetime import datetime
+from collections.abc import Iterable, Mapping, Sequence
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Literal
 
+from wildfire_core.schemas.phase2 import WeatherSnapshot
 from wildfire_core.schemas.plan import (
     IntegratedPlan,
     PlanDraft,
     PlanFreshness,
     PlanProvenance,
+    ShelterSnapshot,
     ValidationResult,
 )
 
@@ -46,6 +48,83 @@ _SHARED_FIELDS = (
     "max_vc_ratio",
 )
 _APPROVABLE_FIELDS = ("routes", "shelter_assignments", "dispatches")
+
+
+def _aware(value: datetime) -> datetime:
+    return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+
+
+def _age_min(now: datetime, then: datetime) -> int:
+    return max(0, int((_aware(now) - _aware(then)).total_seconds() // 60))
+
+
+def build_freshness(
+    *,
+    computed_at: datetime,
+    latest_hotspot_at: datetime | None,
+    weather_by_cluster: Mapping[str, WeatherSnapshot],
+    graph_built_at: datetime | None,
+    stale_firms_min: int,
+) -> PlanFreshness:
+    firms_age = None if latest_hotspot_at is None else _age_min(computed_at, latest_hotspot_at)
+    ages: dict[str, int] = {}
+    stale_weather: list[str] = []
+    for cluster_id in sorted(weather_by_cluster):
+        snapshot = weather_by_cluster[cluster_id]
+        age = snapshot.age_min
+        ages[cluster_id] = age if age is not None else _age_min(computed_at, snapshot.valid_time)
+        if snapshot.is_stale:
+            stale_weather.append(f"weather:{cluster_id}")
+    stale = ["firms"] if firms_age is not None and firms_age > stale_firms_min else []
+    return PlanFreshness(
+        computed_at=computed_at,
+        firms_age_min=firms_age,
+        weather_age_min_by_cluster=ages,
+        weather_age_min_max=max(ages.values()) if ages else None,
+        graph_built_at=graph_built_at,
+        stale_inputs=(*stale, *stale_weather),
+    )
+
+
+def build_provenance(
+    *,
+    run_id: str,
+    state_version: int,
+    weather_provider: str,
+    graph_source: str,
+    graph_node_count: int,
+    graph_edge_count: int,
+    trigger_id: str | None = None,
+    hotspot_ids: Iterable[str] = (),
+    cluster_ids: Iterable[str] = (),
+    fire_run_ids: Iterable[str] = (),
+    fire_seeds: Iterable[int] = (),
+    weather_valid_times: Mapping[str, datetime] | None = None,
+    graph_mtime: datetime | None = None,
+    shelter_snapshot: Iterable[ShelterSnapshot] = (),
+    settlement_sources: Mapping[str, str] | None = None,
+    params: Mapping[str, float | int | str | list[str]] | None = None,
+    llm_metadata: Mapping[str, Any] | None = None,
+) -> PlanProvenance:
+    return PlanProvenance(
+        run_id=run_id,
+        trigger_id=trigger_id,
+        state_version=state_version,
+        hotspot_ids=tuple(hotspot_ids),
+        cluster_ids=tuple(cluster_ids),
+        fire_run_ids=tuple(fire_run_ids),
+        fire_seeds=tuple(fire_seeds),
+        weather_valid_times=dict(weather_valid_times or {}),
+        weather_provider=weather_provider,
+        graph_source=graph_source,
+        graph_mtime=graph_mtime,
+        graph_node_count=graph_node_count,
+        graph_edge_count=graph_edge_count,
+        shelter_snapshot=tuple(shelter_snapshot),
+        settlement_sources=dict(settlement_sources or {}),
+        params=dict(params or {}),
+        llm_metadata=dict(llm_metadata) if llm_metadata is not None else None,
+    )
 
 
 def freshness_warnings(freshness: PlanFreshness) -> tuple[str, ...]:

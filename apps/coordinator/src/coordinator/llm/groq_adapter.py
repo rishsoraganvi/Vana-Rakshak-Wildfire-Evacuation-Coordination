@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import json
 import time
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from groq import Groq
@@ -190,3 +191,113 @@ def generate_rationale(
         return fallback(
             f"error:{name}", f"LLM error: {name}", llm_called=True, effort=reasoning_effort
         )
+
+
+def _load_prompt(name: str) -> tuple[str, str]:
+    """Read a versioned prompt from ``apps/coordinator/prompts``; the version is the file stem."""
+    path = Path(__file__).resolve().parents[3] / "prompts" / f"{name}.md"
+    return path.read_text(encoding="utf-8").strip(), name
+
+
+def _gate(settings: Settings) -> str | None:
+    """HI-05: no client is constructed unless the operator enabled Groq."""
+    if not settings.llm_enabled:
+        return "llm_disabled"
+    if settings.llm_provider != "groq":
+        return "provider_not_groq"
+    if not settings.llm_model.strip():
+        return "model_not_configured"
+    if not settings.groq_api_key.get_secret_value().strip():
+        return "api_key_missing"
+    return None
+
+
+def _reasoning_kwargs(settings: Settings) -> tuple[dict[str, Any], str | None]:
+    if settings.llm_model.startswith("openai/gpt-oss"):
+        # Keep reasoning tokens out of message.content and inside the token cap.
+        return {"reasoning_effort": "low", "include_reasoning": False}, "low"
+    return {}, None
+
+
+def _usage(response: Any) -> dict[str, int | None] | None:
+    raw = getattr(response, "usage", None)
+    if raw is None:
+        return None
+    return {
+        "prompt_tokens": getattr(raw, "prompt_tokens", None),
+        "completion_tokens": getattr(raw, "completion_tokens", None),
+        "total_tokens": getattr(raw, "total_tokens", None),
+    }
+
+
+def generate_plan_rationale(plan_summary: Mapping[str, Any], settings: Settings) -> RationaleResult:
+    """Rationale for an ``IntegratedPlan`` from a compact settlement-level summary (no geometry)."""
+    prompt_version = "plan_rationale_v1"
+    effort: str | None = None
+
+    def meta(
+        *, llm_called: bool, is_fallback: bool, reason: str | None, **extra: Any
+    ) -> dict[str, Any]:
+        return {
+            **_metadata(
+                settings,
+                llm_called=llm_called,
+                is_fallback=is_fallback,
+                fallback_reason=reason,
+                reasoning_effort=effort,
+                **extra,
+            ),
+            "prompt_version": prompt_version,
+        }
+
+    def fallback(reason: str, *, llm_called: bool) -> RationaleResult:
+        text = (
+            f"[DETERMINISTIC FALLBACK] LLM rationale unavailable ({reason}). Human review required."
+        )
+        return RationaleResult(
+            text=text,
+            is_fallback=True,
+            model_metadata=meta(llm_called=llm_called, is_fallback=True, reason=reason),
+        )
+
+    gate = _gate(settings)
+    if gate is not None:
+        return fallback(gate, llm_called=False)
+
+    request_kwargs, effort = _reasoning_kwargs(settings)
+    try:
+        system_prompt, prompt_version = _load_prompt("plan_rationale_v1")
+        messages: list[ChatCompletionSystemMessageParam | ChatCompletionUserMessageParam] = [
+            {"role": "system", "content": system_prompt},
+            {
+                "role": "user",
+                "content": json.dumps(plan_summary, sort_keys=True, separators=(",", ":")),
+            },
+        ]
+        time.sleep(1)
+        api_key = settings.groq_api_key.get_secret_value().strip()
+        response = Groq(api_key=api_key).chat.completions.create(
+            model=settings.llm_model,
+            messages=messages,
+            max_completion_tokens=settings.llm_rationale_max_tokens,
+            timeout=settings.llm_request_timeout_s,
+            **request_kwargs,
+        )
+        choice = response.choices[0]
+        content = choice.message.content
+        if not isinstance(content, str) or not content.strip():
+            raise ValueError("Groq returned an empty rationale")
+        return RationaleResult(
+            text=content.strip(),
+            is_fallback=False,
+            model_metadata=meta(
+                llm_called=True,
+                is_fallback=False,
+                reason=None,
+                finish_reason=getattr(choice, "finish_reason", None),
+                usage=_usage(response),
+                response_model=getattr(response, "model", None),
+            ),
+        )
+    except Exception as error:
+        return fallback(f"error:{type(error).__name__}", llm_called=True)

@@ -16,6 +16,10 @@ from wildfire_core.schemas.plan import ValidationResult
 
 NUM = re.compile(r"(?<![\w.])-?\d+(?:\.\d+)?")
 FACT_NUM = re.compile(r"\d+(?:\.\d+)?")
+_LIST_MARKER = re.compile(
+    r"^[ 	]*(?:#{1,6}[ 	]+)?(?:(?:[-*+]|\d+[.)])[ 	]+)?", re.MULTILINE
+)
+_THOUSANDS = re.compile(r"(?<=\d),(?=\d{3}(?!\d))")
 UUID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", re.IGNORECASE)
 
 NAME_KEYS = frozenset({"settlement_name", "shelter_name", "name"})
@@ -130,12 +134,24 @@ def number_grounded(token: str, facts: frozenset[float]) -> bool:
     return any(abs(fact - value) <= tolerance for fact in facts)
 
 
+def _word(name: str) -> re.Pattern[str]:
+    return re.compile(rf"(?<!\w){re.escape(name)}(?!\w)", re.IGNORECASE)
+
+
 def check_grounding(text: str, facts: GroundingFacts) -> ValidationResult:
     reasons: list[str] = []
     for found in UUID.findall(text):
         if found.lower() not in facts.ids:
             reasons.append(f"unknown id: {found}")
-    scan = UUID.sub(" ", text)
+    # Strip list markers / heading numbers and thousands separators, then plan names (their own
+    # digits are plan facts and a registry name may be a word inside a longer plan name).
+    scan = _THOUSANDS.sub("", _LIST_MARKER.sub("", UUID.sub(" ", text)))
+    for name in sorted(facts.plan_names, key=len, reverse=True):
+        if name:
+            scan = _word(name).sub(" ", scan)
+    for name in sorted(facts.registry_names - facts.plan_names):
+        if _word(name).search(scan):
+            reasons.append(f"unknown name: {name}")
     for token in NUM.findall(scan):
         if not number_grounded(token, facts.numbers):
             reasons.append(f"ungrounded number: {token}")
