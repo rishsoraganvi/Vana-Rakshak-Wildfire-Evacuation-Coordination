@@ -167,6 +167,10 @@ def _print_summary(
 
 
 def main() -> int:
+    # LLM text may contain characters (e.g. U+202F) a Windows cp1252 console cannot encode.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(errors="replace")
     load_dotenv(ROOT / ".env")
     os.environ["OSM_CACHE_PATH"] = str(FIXTURE_PATH)
     # The demo is the Groq demo (D-08/D-15); an operator export of LLM_ENABLED=false wins.
