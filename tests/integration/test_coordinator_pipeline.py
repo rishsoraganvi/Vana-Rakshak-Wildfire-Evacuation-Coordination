@@ -97,8 +97,8 @@ def seeded_incident() -> Iterator[dict[str, str]]:
     finally:
         with engine.begin() as connection:
             connection.execute(
-                text("DELETE FROM agent_runs WHERE run_id = :run_id"),
-                {"run_id": run_id},
+                text("DELETE FROM shared_state_snapshots WHERE incident_id = :incident_id"),
+                {"incident_id": incident_id},
             )
             connection.execute(
                 text("DELETE FROM plan_versions WHERE incident_id = :incident_id"),
@@ -106,6 +106,10 @@ def seeded_incident() -> Iterator[dict[str, str]]:
             )
             connection.execute(
                 text("DELETE FROM triggers WHERE incident_id = :incident_id"),
+                {"incident_id": incident_id},
+            )
+            connection.execute(
+                text("DELETE FROM agent_runs WHERE incident_id = :incident_id"),
                 {"incident_id": incident_id},
             )
             connection.execute(
@@ -123,7 +127,7 @@ def seeded_incident() -> Iterator[dict[str, str]]:
         engine.dispose()
 
 
-def test_full_pipeline_produces_draft_plan(
+def test_full_pipeline_produces_a_validated_plan(
     seeded_incident: dict[str, str],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -137,15 +141,11 @@ def test_full_pipeline_produces_draft_plan(
     state = run_coordinator(seeded_incident["incident_id"], seeded_incident["run_id"])
 
     assert state["error"] is None
-    assert len(state["audit_entries"]) == 8
+    assert len(state["audit_entries"]) >= 10
     assert len(state["clusters"]) >= 1
     assert len(state["fire_results"]) == len(state["clusters"])
-    assert state["rationale"]
     rationale_entry = next(
         entry for entry in state["audit_entries"] if entry["node_name"] == "generate_rationale"
-    )
-    assert state["is_llm_fallback"] is False, (
-        f"Groq call fell back: {rationale_entry['model_metadata']}"
     )
 
     settings = load_settings()
@@ -174,14 +174,26 @@ def test_full_pipeline_produces_draft_plan(
     assert rationale_metadata is not None
     if isinstance(rationale_metadata, str):
         rationale_metadata = json.loads(rationale_metadata)
-    assert rationale_metadata["model"] == settings.llm_model
-    assert rationale_metadata["is_fallback"] is False
-    assert rationale_metadata["llm_called"] is True
     plan_data = plan["plan_data"]
     if isinstance(plan_data, str):
         plan_data = json.loads(plan_data)
     assert len(plan_data["fire_results"]) == len(plan_data["clusters"])
-    assert plan["status"] == "draft"
+    assert plan["status"] in {"pending_review", "failed"}
+    assert plan_data["plan_schema_version"] == "3.0"
+    assert plan_data["freshness"] and plan_data["provenance"]
+    assert 0 < len(plan_data["validation"]) <= 8
     assert str(plan["id"]) == plan_data["plan_id"]
-    assert audit_count == 8
+    assert audit_count >= 10
+    if plan["status"] == "failed":
+        # a failed plan is explained and never reaches the LLM (D-13)
+        assert plan_data["failure_reasons"]
+        assert rationale_metadata["fallback_reason"] == "plan_failed"
+    else:
+        assert state["rationale_text"]
+        assert state["is_llm_fallback"] is False, (
+            f"Groq call fell back: {rationale_entry['model_metadata']}"
+        )
+        assert rationale_metadata["model"] == settings.llm_model
+        assert rationale_metadata["is_fallback"] is False
+        assert rationale_metadata["llm_called"] is True
     engine.dispose()

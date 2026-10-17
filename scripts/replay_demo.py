@@ -58,7 +58,7 @@ def _seed_demo(engine, now: datetime) -> tuple[str, str]:
             text(
                 """
                 INSERT INTO incidents (id, code, status, origin, summary)
-                VALUES (:id, :code, 'open', 'replay', 'Phase 2 replay demo')
+                VALUES (:id, :code, 'open', 'replay', 'Replay demo')
                 """
             ),
             {"id": incident_id, "code": f"REPLAY-{incident_id.hex[:10]}"},
@@ -110,14 +110,16 @@ def _seed_demo(engine, now: datetime) -> tuple[str, str]:
     return str(incident_id), str(run_id)
 
 
-def _fetch_draft(engine, incident_id: str) -> dict[str, object] | None:
+def _fetch_latest_plan(engine, incident_id: str) -> dict[str, object] | None:
+    """Latest live plan: Phase 3 plans are pending_review or failed, Phase 2 ones were draft."""
     with engine.connect() as connection:
         row = connection.execute(
             text(
                 """
                 SELECT id, status::text AS status, plan_data
                 FROM plan_versions
-                WHERE incident_id = :incident_id AND status = 'draft'
+                WHERE incident_id = :incident_id
+                  AND status IN ('draft', 'pending_review', 'failed')
                 ORDER BY version DESC
                 LIMIT 1
                 """
@@ -137,13 +139,17 @@ def _print_summary(
     plan_data = plan["plan_data"]
     if isinstance(plan_data, str):
         plan_data = json.loads(plan_data)
-    fire_results = plan_data["fire_results"]
+    fire_results = plan_data.get("fire_results", [])
     rationale = plan_data.get("rationale_md", "")
     routes = plan_data.get("routes", [])
+    groups = plan_data.get("groups", [])
+    assignments = plan_data.get("shelter_assignments", [])
     warnings = plan_data.get("warnings", [])
+    alerts = plan_data.get("alerts", [])
+    failure_reasons = plan_data.get("failure_reasons", [])
 
     print("=" * 65)
-    print("  Vana-Rakshak Phase 2 - Replay Demo")
+    print("  Vana-Rakshak Phase 3 - Replay Demo")
     print("=" * 65)
     print(f"  Incident ID   : {incident_id}")
     print(f"  Run ID        : {run_id}")
@@ -155,11 +161,19 @@ def _print_summary(
         f"  Fire CA       : {len(fire_results)} cluster(s) | "
         f"{total_area:.2f} km2 affected | confidence {confidences}"
     )
+    print(f"  Groups        : {len(groups)} | shelter assignments: {len(assignments)}")
     classification_counts = Counter(route["safety_classification"] for route in routes)
     counts_text = ", ".join(
         f"{name}: {count}" for name, count in sorted(classification_counts.items())
     )
     print(f"  Routes        : {len(routes)} computed ({counts_text or 'none'})")
+    print(f"  Used fallback : {plan_data.get('used_fallback', False)}")
+    for reason in failure_reasons:
+        print(f"  FAILURE       : {reason}")
+    for alert in alerts:
+        print(f"  Alert         : [{alert.get('kind')}] {alert.get('message')}")
+    if not groups:
+        print("  WARNING: no settlement intersects the forecast footprint; no groups to plan.")
     print(f"  LLM Model     : {llm_metadata.get('provider')}/{llm_metadata.get('model')}")
     if plan_data.get("is_llm_fallback"):
         print(f"  LLM Fallback  : Yes ({llm_metadata.get('fallback_reason')})")
@@ -211,12 +225,14 @@ def main() -> int:
         deadline = time.monotonic() + 60
         plan = None
         while time.monotonic() < deadline:
-            plan = _fetch_draft(engine, incident_id)
+            plan = _fetch_latest_plan(engine, incident_id)
             if plan is not None:
                 break
             time.sleep(2)
         if plan is None:
-            raise TimeoutError("Coordinator did not persist a draft plan within 60 seconds")
+            raise TimeoutError(
+                "Coordinator did not persist a plan (pending_review or failed) within 60 seconds"
+            )
 
         with engine.connect() as connection:
             audit_count = connection.execute(
