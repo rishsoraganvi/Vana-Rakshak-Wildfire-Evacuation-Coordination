@@ -53,6 +53,27 @@ def _metadata(
     }
 
 
+# Polygon WKT and per-node route paths are large geometry, not rationale grounding: sending them
+# made the prompt ~16k tokens and exceeded Groq's on-demand TPM limit (413). The deterministic
+# metrics below are what the rationale may cite.
+_FIRE_GEOMETRY_FIELDS = {
+    "current_perimeter_wkt",
+    "p50_1h_wkt",
+    "p50_3h_wkt",
+    "p50_6h_wkt",
+    "p90_1h_wkt",
+    "p90_3h_wkt",
+    "p90_6h_wkt",
+}
+
+
+def _route_summary(route: RouteResult) -> dict[str, Any]:
+    summary = route.model_dump(mode="json", exclude={"osm_node_path", "fire_penalty_edges"})
+    summary["path_node_count"] = len(route.osm_node_path)
+    summary["fire_penalty_edge_count"] = len(route.fire_penalty_edges)
+    return summary
+
+
 def generate_rationale(
     fire_results: Sequence[FireSpreadResult],
     weather: WeatherSnapshot,
@@ -61,9 +82,12 @@ def generate_rationale(
 ) -> RationaleResult:
     user_payload = json.dumps(
         {
-            "fire_results": [result.model_dump(mode="json") for result in fire_results],
+            "fire_results": [
+                result.model_dump(mode="json", exclude=_FIRE_GEOMETRY_FIELDS)
+                for result in fire_results
+            ],
             "weather": weather.model_dump(mode="json"),
-            "routes": [route.model_dump(mode="json") for route in routes],
+            "routes": [_route_summary(route) for route in routes],
         },
         indent=2,
         sort_keys=True,

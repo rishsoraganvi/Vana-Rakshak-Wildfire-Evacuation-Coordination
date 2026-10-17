@@ -276,3 +276,17 @@ def test_blank_env_value_does_not_shadow_config_default(monkeypatch) -> None:
     settings = load_settings(Path("config/defaults.yaml"))
 
     assert settings.llm_model == "openai/gpt-oss-20b"
+
+
+def test_generate_rationale_payload_omits_bulky_geometry(monkeypatch) -> None:
+    fire_result, weather, routes = make_inputs()
+    requests = _capturing_groq(monkeypatch)
+
+    groq_adapter.generate_rationale([fire_result], weather, routes, llm_settings())
+
+    payload = json.loads(requests[0]["messages"][1]["content"])
+    assert "p50_1h_wkt" not in payload["fire_results"][0]
+    assert "current_perimeter_wkt" not in payload["fire_results"][0]
+    assert payload["fire_results"][0]["affected_area_km2"] == 12.5
+    assert "osm_node_path" not in payload["routes"][0]
+    assert payload["routes"][0]["path_node_count"] == 2
