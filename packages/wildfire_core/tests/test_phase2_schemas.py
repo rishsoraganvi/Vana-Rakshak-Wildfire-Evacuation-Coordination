@@ -148,7 +148,7 @@ def test_coordinator_plan_default_status_draft():
     plan = CoordinatorPlan(
         incident_id=str(uuid.uuid4()),
         run_id=str(uuid.uuid4()),
-        fire_result=fire_result,
+        fire_results=(fire_result,),
         weather_snapshot=weather,
         clusters=(),
         routes=(),
@@ -158,3 +158,23 @@ def test_coordinator_plan_default_status_draft():
     assert plan.is_llm_fallback is False
     assert plan.rationale_md == "Test rationale"
     assert uuid.UUID(plan.plan_id)
+
+
+def test_coordinator_plan_requires_fire_results():
+    weather = WeatherSnapshot(
+        valid_time=datetime.now(UTC),
+        wind_speed_ms=3.0,
+        wind_dir_deg=180.0,
+        rh_pct=45.0,
+        temperature_c=28.0,
+    )
+    with pytest.raises(ValidationError):
+        CoordinatorPlan(
+            incident_id=str(uuid.uuid4()),
+            run_id=str(uuid.uuid4()),
+            fire_results=(),
+            weather_snapshot=weather,
+            clusters=(),
+            routes=(),
+            rationale_md="Test rationale",
+        )

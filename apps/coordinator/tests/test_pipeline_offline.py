@@ -12,6 +12,8 @@ from coordinator import graph as coordinator_graph
 from coordinator.llm.groq_adapter import RationaleResult, base_model_metadata
 from coordinator.runner import build_graph
 from pydantic import SecretStr
+from shapely import wkt
+from shapely.geometry import Point, box
 from wildfire_core.config import BBox
 from wildfire_core.schemas.phase2 import FireSpreadResult, WeatherSnapshot
 
@@ -147,7 +149,7 @@ def test_coordinator_runs_all_nodes_with_incident_scoped_data(monkeypatch) -> No
         "hotspots": [],
         "weather_snapshot": None,
         "clusters": [],
-        "fire_result": None,
+        "fire_results": [],
         "routes": [],
         "rationale": "",
         "is_llm_fallback": False,
@@ -161,7 +163,7 @@ def test_coordinator_runs_all_nodes_with_incident_scoped_data(monkeypatch) -> No
     assert final_state["error"] is None
     assert final_state["hotspot_ids"] == [str(item) for item in hotspot_ids]
     assert len(final_state["clusters"]) == 1
-    assert final_state["fire_result"] is not None
+    assert len(final_state["fire_results"]) == 1
     assert final_state["routes"]
     assert final_state["rationale"] == "Grounded replay rationale"
     assert len(final_state["audit_entries"]) == 8
@@ -199,7 +201,7 @@ def test_generate_rationale_audit_records_metadata_when_inputs_unavailable(monke
     state = {
         "incident_id": str(uuid4()),
         "run_id": str(uuid4()),
-        "fire_result": None,
+        "fire_results": [],
         "weather_snapshot": None,
         "routes": [],
         "rationale": "",
@@ -231,3 +233,205 @@ def _fire_result(cluster, _weather, **_kwargs) -> FireSpreadResult:
         spread_rate_m_per_h=100.0,
         confidence="medium",
     )
+
+
+# ---------------------------------------------------------------------------
+# Plan 02-07: per-cluster CA, union-penalised routing, outside-fire origins
+# ---------------------------------------------------------------------------
+
+
+def _pipeline_settings(**overrides) -> SimpleNamespace:
+    values = {
+        "database_url": SecretStr("postgresql+psycopg://unused"),
+        "aoi_bbox": BBox(west=76.0, south=11.5, east=77.3, north=12.4),
+        "osm_cache_path": Path("tests/fixtures/osm/bandipur_stub.graphml"),
+        "dbscan_eps_deg": 0.01,
+        "dbscan_min_samples": 3,
+        "fire_grid_resolution_m": 250,
+        "fire_ensemble_seeds": (42, 43, 44),
+        "route_fire_penalty_near": 5.0,
+        "llm_provider": "groq",
+        "llm_model": "test-model",
+        "llm_enabled": True,
+        "llm_rationale_max_tokens": 400,
+        "llm_request_timeout_s": 30,
+    }
+    values.update(overrides)
+    return SimpleNamespace(**values)
+
+
+def _pipeline_weather() -> WeatherSnapshot:
+    return WeatherSnapshot(
+        valid_time=datetime.now(UTC),
+        wind_speed_ms=5.0,
+        wind_dir_deg=45.0,
+        rh_pct=30.0,
+        temperature_c=34.0,
+    )
+
+
+def _empty_state() -> dict:
+    return {
+        "incident_id": str(uuid4()),
+        "run_id": str(uuid4()),
+        "hotspot_ids": [],
+        "hotspots": [],
+        "weather_snapshot": None,
+        "clusters": [],
+        "fire_results": [],
+        "routes": [],
+        "rationale": "",
+        "is_llm_fallback": False,
+        "audit_entries": [],
+        "warnings": [],
+        "error": None,
+    }
+
+
+def _hotspot_rows(centres, *, counts) -> tuple[list[dict], list]:
+    rows: list[dict] = []
+    ids: list = []
+    for (lat, lon), count in zip(centres, counts, strict=True):
+        for index in range(count):
+            hotspot_id = uuid4()
+            ids.append(hotspot_id)
+            rows.append(
+                {
+                    "id": hotspot_id,
+                    "lat": lat + index * 0.0001,
+                    "lon": lon + index * 0.0001,
+                    "frp": 20.0 + index,
+                }
+            )
+    return rows, ids
+
+
+def _toy_graph(nodes, edges) -> nx.MultiDiGraph:
+    graph = nx.MultiDiGraph()
+    graph.graph["crs"] = "EPSG:4326"
+    for node_id, (x, y) in nodes.items():
+        graph.add_node(node_id, x=x, y=y)
+    for u, v, length, travel_time in edges:
+        graph.add_edge(u, v, key=0, length=length, travel_time=travel_time)
+        graph.add_edge(v, u, key=0, length=length, travel_time=travel_time)
+    return graph
+
+
+def _stub_fire(current_wkt: str, p50_wkt: str, cluster_id: str) -> FireSpreadResult:
+    return FireSpreadResult(
+        cluster_id=cluster_id,
+        current_perimeter_wkt=current_wkt,
+        p50_1h_wkt=p50_wkt,
+        p50_3h_wkt="POLYGON EMPTY",
+        p50_6h_wkt="POLYGON EMPTY",
+        p90_1h_wkt="POLYGON EMPTY",
+        p90_3h_wkt="POLYGON EMPTY",
+        p90_6h_wkt="POLYGON EMPTY",
+        affected_area_km2=1.0,
+        spread_direction_deg=None,
+        spread_rate_m_per_h=100.0,
+        confidence="medium",
+    )
+
+
+def _square_fire_fn(current_half: float, p50_half: float | None, calls: list):
+    def fire(cluster, _weather, **_kwargs) -> FireSpreadResult:
+        calls.append(cluster.cluster_id)
+        lon, lat = cluster.centroid_lon, cluster.centroid_lat
+        current = box(lon - current_half, lat - current_half, lon + current_half, lat + current_half)
+        p50 = (
+            box(lon - p50_half, lat - p50_half, lon + p50_half, lat + p50_half).wkt
+            if p50_half is not None
+            else "POLYGON EMPTY"
+        )
+        return _stub_fire(current.wkt, p50, cluster.cluster_id)
+
+    return fire
+
+
+def _install_pipeline(monkeypatch, *, engine, settings, graph, fire_fn, rationale=None) -> None:
+    monkeypatch.setattr(coordinator_graph, "_settings", lambda: settings)
+    monkeypatch.setattr(coordinator_graph, "_engine_for", lambda _url: engine)
+    monkeypatch.setattr(
+        coordinator_graph, "get_weather_snapshot", lambda *_args: _pipeline_weather()
+    )
+    monkeypatch.setattr(coordinator_graph, "compute_fire_spread", fire_fn)
+    monkeypatch.setattr(coordinator_graph, "load_or_download_graph", lambda *_args: graph)
+    monkeypatch.setattr(
+        coordinator_graph,
+        "generate_rationale",
+        rationale
+        or (
+            lambda *_args: RationaleResult(
+                text="Grounded rationale",
+                is_fallback=False,
+                model_metadata={**base_model_metadata(settings), "llm_called": True},
+            )
+        ),
+    )
+
+
+def test_every_cluster_is_simulated_and_routing_penalises_union_of_fires(monkeypatch) -> None:
+    rows, ids = _hotspot_rows([(11.90, 76.30), (11.90, 76.40)], counts=(4, 3))
+    engine = FakeEngine(rows, ids)
+    settings = _pipeline_settings()
+    graph = _toy_graph(
+        {1: (76.0, 11.9), 2: (76.6, 11.9), 3: (77.3, 11.9)},
+        [(1, 2, 1000.0, 90.0), (2, 3, 1000.0, 90.0)],
+    )
+    fire_calls: list[str] = []
+    penalty_calls: list[tuple[str, str]] = []
+    real_apply = coordinator_graph.apply_fire_penalties
+
+    def recording_apply(graph_arg, current_wkt, p50_wkt, **kwargs):
+        penalty_calls.append((current_wkt, p50_wkt))
+        return real_apply(graph_arg, current_wkt, p50_wkt, **kwargs)
+
+    rationale_inputs: list = []
+
+    def recording_rationale(fire_results, *_args):
+        rationale_inputs.append(list(fire_results))
+        return RationaleResult(
+            text="Grounded rationale",
+            is_fallback=False,
+            model_metadata={**base_model_metadata(settings), "llm_called": True},
+        )
+
+    _install_pipeline(
+        monkeypatch,
+        engine=engine,
+        settings=settings,
+        graph=graph,
+        fire_fn=_square_fire_fn(0.01, 0.02, fire_calls),
+        rationale=recording_rationale,
+    )
+    monkeypatch.setattr(coordinator_graph, "apply_fire_penalties", recording_apply)
+
+    final_state = build_graph().compile().invoke(_empty_state())
+
+    assert final_state["error"] is None
+    clusters = final_state["clusters"]
+    assert len(clusters) == 2
+    assert len(fire_calls) == 2
+    assert set(fire_calls) == {cluster["cluster_id"] for cluster in clusters}
+
+    assert len(penalty_calls) == 1
+    current_union = wkt.loads(penalty_calls[0][0])
+    p50_union = wkt.loads(penalty_calls[0][1])
+    for cluster in clusters:
+        centroid = Point(cluster["centroid_lon"], cluster["centroid_lat"])
+        assert current_union.covers(centroid)
+        assert p50_union.covers(centroid)
+
+    fire_results = final_state["fire_results"]
+    assert len(fire_results) == 2
+    assert len({item["cluster_id"] for item in fire_results}) == 2
+
+    plan_data = json.loads(engine.plan_parameters["plan_data"])
+    assert len(plan_data["fire_results"]) == len(plan_data["clusters"]) == 2
+    assert {item["cluster_id"] for item in plan_data["fire_results"]} == {
+        item["cluster_id"] for item in plan_data["clusters"]
+    }
+
+    assert len(rationale_inputs) == 1
+    assert len(rationale_inputs[0]) == 2
