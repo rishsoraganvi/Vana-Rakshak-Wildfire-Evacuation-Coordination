@@ -19,6 +19,7 @@ from coordinator.repository import (
 )
 from plan_factory import NOW, failed_draft, failing, freshness, provenance, valid_draft, valid_until
 from wildfire_core.schemas.plan import IntegratedPlan, SettlementRecord, ShelterRecord
+from wildfire_core.schemas.state import PlanSection, SharedState, StateReference
 
 INCIDENT = str(uuid4())
 NAMES = ["Mudumalai", "Kargudi", "Gudalur School", "Masinagudi Hall"]
@@ -367,10 +368,39 @@ def test_in_memory_registry_reads_are_sorted() -> None:
     assert repo.edge_statuses(datetime.now(UTC)) == {(1, 2, 0): "blocked"}
 
 
-def test_shared_state_for_references_inputs() -> None:
-    state = shared_state_for(make_plan(), 3)
-    assert state.version == 3
-    assert {(item.kind, item.identifier) for item in state.references} == {
+def test_shared_state_for_has_techspec_sections_and_references() -> None:
+    plan = make_plan().model_copy(update={"version": 4})
+    state = shared_state_for(plan, 3)
+
+    assert state.version == 3 and state.updated_at == plan.created_at
+    assert {
         ("hotspot", "h1"),
         ("fire_run", "fr1"),
-    }
+        ("plan", plan.plan_id),
+    } <= {(item.kind, item.identifier) for item in state.references}
+    assert state.plan is not None
+    assert (state.plan.current_plan_id, state.plan.status, state.plan.version) == (
+        plan.plan_id,
+        "pending_review",
+        4,
+    )
+    assert state.fire is not None and state.fire.run_ids == ("fr1",)
+    assert state.risk is not None
+    assert [(item.id, item.eta_min) for item in state.risk.settlements_at_risk] == [
+        ("g0", 38.42),
+        ("g1", 22.0),
+    ]
+    assert state.freshness is not None and state.freshness.firms_age_min == 20
+    assert state.roads is not None and state.shelters is not None
+    assert shared_state_for(plan, 3) == state  # deterministic labels
+
+
+def test_phase1_shared_state_still_validates() -> None:
+    state = SharedState(
+        incident_id="i",
+        version=1,
+        references=(StateReference(kind="hotspot", identifier="h"),),
+    )
+    assert state.plan is None and state.fire is None
+    with pytest.raises(ValueError):
+        PlanSection(current_plan_id="p", bogus=1)  # type: ignore[call-arg]

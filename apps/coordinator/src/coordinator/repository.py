@@ -14,6 +14,7 @@ snapshot.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import uuid
@@ -31,7 +32,17 @@ from sqlalchemy import Engine, bindparam, text
 from wildfire_core.db.repositories import current_edge_statuses
 from wildfire_core.schemas.phase2 import WeatherSnapshot
 from wildfire_core.schemas.plan import IntegratedPlan, SettlementRecord, ShelterRecord
-from wildfire_core.schemas.state import SharedState, StateReference
+from wildfire_core.schemas.state import (
+    FireSection,
+    FreshnessSection,
+    PlanSection,
+    RiskSection,
+    RoadsSection,
+    SettlementEta,
+    SharedState,
+    SheltersSection,
+    StateReference,
+)
 
 from coordinator.audit import flush_audit_entries
 
@@ -166,20 +177,62 @@ def capacity_violations(
     return tuple(violations)
 
 
+def _content_hash(items: Iterable[Sequence[Any]]) -> str:
+    """Short stable hash of sorted tuples: equal inputs give an equal version label."""
+    payload = json.dumps(sorted(list(item) for item in items), default=str)
+    return hashlib.sha256(payload.encode()).hexdigest()[:12]
+
+
 def shared_state_for(plan: IntegratedPlan, state_version: int) -> SharedState:
-    """Shared state by reference (Rules 2.7): ids of the inputs the plan was built on."""
+    """Shared state by reference (Rules 2.7): ids and version labels, never bulk payloads."""
+    provenance = plan.provenance
     references: list[StateReference] = [
         StateReference(kind="hotspot", identifier=hotspot_id)
-        for hotspot_id in plan.provenance.hotspot_ids
+        for hotspot_id in provenance.hotspot_ids
     ]
     references.extend(
-        StateReference(kind="fire_run", identifier=run_id)
-        for run_id in plan.provenance.fire_run_ids
+        StateReference(kind="fire_run", identifier=run_id) for run_id in provenance.fire_run_ids
     )
+    references.append(StateReference(kind="plan", identifier=plan.plan_id))
+    references.extend(
+        StateReference(kind="risk_assessment", identifier=risk.cluster_id) for risk in plan.risk
+    )
+    references.extend(
+        StateReference(kind="shelter", identifier=item.shelter_id)
+        for item in provenance.shelter_snapshot
+    )
+    edge_entries = {
+        (edge.u, edge.v, edge.key, edge.status)
+        for route in plan.routes
+        for edge in route.edge_status_snapshot
+    }
     return SharedState(
         incident_id=plan.incident_id,
         version=state_version,
         references=tuple(references),
+        updated_at=plan.created_at,
+        fire=FireSection(
+            run_ids=provenance.fire_run_ids,
+            cluster_ids=provenance.cluster_ids,
+        ),
+        risk=RiskSection(
+            settlements_at_risk=tuple(
+                SettlementEta(id=group.settlement_id, eta_min=group.eta_min)
+                for group in plan.groups
+            )
+        ),
+        roads=RoadsSection(edge_status_version=_content_hash(edge_entries)),
+        shelters=SheltersSection(
+            occupancy_version=_content_hash(
+                (item.shelter_id, item.occupancy, item.is_active)
+                for item in provenance.shelter_snapshot
+            )
+        ),
+        plan=PlanSection(current_plan_id=plan.plan_id, status=plan.status, version=plan.version),
+        freshness=FreshnessSection(
+            firms_age_min=plan.freshness.firms_age_min,
+            weather_age_min=plan.freshness.weather_age_min_max,
+        ),
     )
 
 
