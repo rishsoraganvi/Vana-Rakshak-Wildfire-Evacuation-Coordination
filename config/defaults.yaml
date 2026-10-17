@@ -9,8 +9,8 @@ firms_sources:
   - VIIRS_NOAA20_NRT
   - MODIS_NRT
 llm_enabled: false
-llm_provider: anthropic
-llm_model: ""
+llm_provider: groq
+llm_model: openai/gpt-oss-20b
 database_url: postgresql+psycopg://wildfire:change_me@postgres:5432/wildfire
 redis_url: redis://redis:6379/0
 groq_api_key: ""

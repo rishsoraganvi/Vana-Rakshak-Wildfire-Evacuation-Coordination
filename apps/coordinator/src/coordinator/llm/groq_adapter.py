@@ -39,6 +39,7 @@ def _metadata(
     finish_reason: str | None = None,
     usage: dict[str, int | None] | None = None,
     response_model: str | None = None,
+    reasoning_effort: str | None = None,
 ) -> dict[str, Any]:
     return {
         **base_model_metadata(settings),
@@ -48,6 +49,7 @@ def _metadata(
         "finish_reason": finish_reason,
         "usage": usage,
         "response_model": response_model,
+        "reasoning_effort": reasoning_effort,
     }
 
 
@@ -79,7 +81,9 @@ def generate_rationale(
         {"role": "user", "content": user_payload},
     ]
 
-    def fallback(reason: str, detail: str, *, llm_called: bool) -> RationaleResult:
+    def fallback(
+        reason: str, detail: str, *, llm_called: bool, effort: str | None = None
+    ) -> RationaleResult:
         total_area = sum(result.affected_area_km2 for result in fire_results)
         text = (
             f"[DETERMINISTIC FALLBACK] Fire spread CA: {total_area:g} km2 across "
@@ -90,17 +94,43 @@ def generate_rationale(
             text=text,
             is_fallback=True,
             model_metadata=_metadata(
-                settings, llm_called=llm_called, is_fallback=True, fallback_reason=reason
+                settings,
+                llm_called=llm_called,
+                is_fallback=True,
+                fallback_reason=reason,
+                reasoning_effort=effort,
             ),
         )
 
+    # HI-05: never construct a client or sleep unless the operator enabled Groq.
+    api_key = settings.groq_api_key.get_secret_value().strip()
+    gate: str | None = None
+    if not settings.llm_enabled:
+        gate = "llm_disabled"
+    elif settings.llm_provider != "groq":
+        gate = "provider_not_groq"
+    elif not settings.llm_model.strip():
+        gate = "model_not_configured"
+    elif not api_key:
+        gate = "api_key_missing"
+    if gate is not None:
+        return fallback(gate, f"LLM unavailable: {gate}", llm_called=False)
+
+    request_kwargs: dict[str, Any] = {}
+    reasoning_effort: str | None = None
+    if settings.llm_model.startswith("openai/gpt-oss"):
+        # Keep reasoning tokens out of message.content and inside the D-09 cap.
+        reasoning_effort = "low"
+        request_kwargs = {"reasoning_effort": reasoning_effort, "include_reasoning": False}
+
     try:
         time.sleep(1)
-        response = Groq(api_key=settings.groq_api_key.get_secret_value()).chat.completions.create(
+        response = Groq(api_key=api_key).chat.completions.create(
             model=settings.llm_model,
             messages=messages,
             max_completion_tokens=settings.llm_rationale_max_tokens,
             timeout=settings.llm_request_timeout_s,
+            **request_kwargs,
         )
         choice = response.choices[0]
         finish_reason = getattr(choice, "finish_reason", None)
@@ -128,8 +158,11 @@ def generate_rationale(
                 finish_reason=finish_reason,
                 usage=usage,
                 response_model=getattr(response, "model", None),
+                reasoning_effort=reasoning_effort,
             ),
         )
     except Exception as error:
         name = type(error).__name__
-        return fallback(f"error:{name}", f"LLM error: {name}", llm_called=True)
+        return fallback(
+            f"error:{name}", f"LLM error: {name}", llm_called=True, effort=reasoning_effort
+        )
