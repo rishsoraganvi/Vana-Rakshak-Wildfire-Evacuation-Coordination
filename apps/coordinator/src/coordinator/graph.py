@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import time
 from collections.abc import Iterable
 from datetime import UTC, datetime
@@ -10,7 +11,12 @@ from uuid import UUID
 
 import networkx as nx
 from agent_fire.ensemble import compute_fire_spread
-from agent_routing import apply_fire_penalties, compute_route, load_or_download_graph, nearest_node
+from agent_routing import (
+    apply_fire_penalties,
+    compute_route,
+    load_or_download_graph,
+    nearest_node_outside,
+)
 from agent_weather.agent import get_weather_snapshot
 from ingest_worker.clustering import cluster_hotspots
 from shapely import wkt
@@ -83,6 +89,21 @@ def _union_wkt(wkts: Iterable[str]) -> BaseGeometry:
     if not geometries:
         return wkt.loads("POLYGON EMPTY")
     return unary_union(geometries)
+
+
+def _blocked_exposure_s(
+    weighted_graph: nx.MultiDiGraph[int, dict[str, Any], dict[str, Any]],
+    route: RouteResult,
+) -> float:
+    """Travel time spent on edges that are blocked by fire (every parallel edge infinite)."""
+    exposure = 0.0
+    for origin, destination in zip(route.osm_node_path, route.osm_node_path[1:], strict=False):
+        parallel_edges = weighted_graph.get_edge_data(origin, destination) or {}
+        if parallel_edges and all(
+            math.isinf(float(attr["penalised_cost"])) for attr in parallel_edges.values()
+        ):
+            exposure += min(float(attr["travel_time"]) for attr in parallel_edges.values())
+    return exposure
 
 
 def _audit(
@@ -295,7 +316,28 @@ def compute_route_node(state: CoordinatorState) -> CoordinatorState:
         )
         for raw_cluster in state["clusters"]:
             cluster = HotspotCluster.model_validate(raw_cluster)
-            origin_node = nearest_node(graph, cluster.centroid_lat, cluster.centroid_lon)
+            plain_origin = nearest_node_outside(
+                graph, cluster.centroid_lat, cluster.centroid_lon, "POLYGON EMPTY"
+            )
+            origin_node = nearest_node_outside(
+                graph, cluster.centroid_lat, cluster.centroid_lon, union_current.wkt
+            )
+            if plain_origin is None:
+                state["warnings"].append(
+                    f"No graph route found for fire cluster {cluster.cluster_id}"
+                )
+                continue
+            if origin_node is None:
+                origin_node = plain_origin
+                state["warnings"].append(
+                    f"All road nodes near fire cluster {cluster.cluster_id} are inside the "
+                    "current perimeter; route starts inside the fire"
+                )
+            elif origin_node != plain_origin:
+                state["warnings"].append(
+                    f"Route origin for fire cluster {cluster.cluster_id} moved to nearest road "
+                    f"node outside the current perimeter (node {origin_node})"
+                )
             origin_data = graph.nodes[origin_node]
             candidates: list[tuple[int, float]] = []
             for node_id in exit_nodes:
@@ -310,6 +352,7 @@ def compute_route_node(state: CoordinatorState) -> CoordinatorState:
             candidates.sort(key=lambda item: item[1])
             route: RouteResult | None = None
             blocked_route: RouteResult | None = None
+            blocked_key: tuple[float, float, int] | None = None
             for destination_node, _distance in candidates:
                 candidate_route = compute_route(
                     weighted_graph,
@@ -323,8 +366,14 @@ def compute_route_node(state: CoordinatorState) -> CoordinatorState:
                 if candidate_route.safety_classification != "blocked":
                     route = candidate_route
                     break
-                if blocked_route is None:
+                candidate_key = (
+                    _blocked_exposure_s(weighted_graph, candidate_route),
+                    candidate_route.estimated_travel_time_s,
+                    destination_node,
+                )
+                if blocked_key is None or candidate_key < blocked_key:
                     blocked_route = candidate_route
+                    blocked_key = candidate_key
 
             route = route or blocked_route
             if route is not None:
