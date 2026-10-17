@@ -43,3 +43,47 @@ def test_flush_audit_entries_bulk_inserts_idempotently() -> None:
     assert session.parameters[0]["id"] == entry_id
     assert session.parameters[0]["incident_id"] == incident_id
     assert session.parameters[0]["created_at"] == created_at
+
+
+def _entry(**overrides: object) -> dict[str, object]:
+    entry: dict[str, object] = {
+        "entry_id": str(uuid4()),
+        "incident_id": str(uuid4()),
+        "run_id": str(uuid4()),
+        "node_name": "specialist_shelter",
+        "inputs_json": "{}",
+        "outputs_json": "{}",
+        "latency_ms": 1,
+        "model_metadata": None,
+        "created_at": datetime.now(UTC).isoformat(),
+    }
+    entry.update(overrides)
+    return entry
+
+
+def test_each_entry_is_written_with_its_own_agent() -> None:
+    session = FakeSession()
+
+    flush_audit_entries(
+        [
+            _entry(agent="shelter"),
+            _entry(agent="traffic_routing"),
+            _entry(agent="coordinator"),
+        ],
+        session,
+    )
+
+    assert "CAST(:agent AS agent_name)" in session.statement
+    assert [row["agent"] for row in session.parameters] == [
+        "shelter",
+        "traffic_routing",
+        "coordinator",
+    ]
+
+
+def test_entry_without_agent_defaults_to_coordinator() -> None:
+    session = FakeSession()
+
+    flush_audit_entries([_entry()], session)
+
+    assert session.parameters[0]["agent"] == "coordinator"

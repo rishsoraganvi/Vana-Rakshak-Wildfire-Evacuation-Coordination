@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from uuid import uuid4
 
+import pytest
 from agent_fire.ensemble import compute_fire_spread
 from coordinator.graph import NODE_ORDER
 from coordinator.runner import run_coordinator
@@ -155,3 +156,28 @@ def test_no_clusters_produces_no_plan() -> None:
     assert state["error"] is not None
     assert repo.latest_plan(INCIDENT_ID) is None
     assert "assemble_plan" in node_names(repo.audit_entries)
+
+
+def test_failed_run_still_flushes_audit_rows_and_a_run_failed_entry() -> None:
+    settings = make_settings()
+    repo, trigger_id = seeded_repository(settings)
+
+    def exploding_rationale(_summary, _settings):
+        raise RuntimeError("model client crashed")
+
+    deps = make_deps(repo, settings, rationale_fn=exploding_rationale)
+    run_id = str(uuid4())
+
+    with pytest.raises(RuntimeError, match="model client crashed"):
+        run_coordinator(INCIDENT_ID, run_id, trigger_id=trigger_id, deps=deps)
+
+    names = [entry["node_name"] for entry in repo.audit_entries]
+    # every node before the failing one was recorded, then the failure marker
+    for node in NODE_ORDER[: NODE_ORDER.index("generate_rationale")]:
+        assert node in names
+    assert names[-1] == "run_failed"
+    failure = repo.audit_entries[-1]
+    assert json.loads(failure["outputs_json"]) == {"error": "RuntimeError"}
+    assert {entry["run_id"] for entry in repo.audit_entries} == {run_id}
+    assert run_id not in deps.scratch
+    assert repo.latest_plan(INCIDENT_ID) is None  # nothing was persisted
