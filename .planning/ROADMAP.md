@@ -32,13 +32,19 @@ Plans:
 
 **Exit criteria:** end-to-end replay passes with mocked LLM; output contains P50/P90 forecast data and route; audit entries cover every node/tool call; fallback works with LLM disabled; core tests pass.
 
-**Plans:** 3/3 plans executed
+**Plans:** 3/9 plans executed (6 gap-closure plans pending)
 
 Plans:
 
 - [x] 02-01-PLAN.md — Contracts, Fire CA Model, Weather Agent, Hotspot Clustering
 - [x] 02-02-PLAN.md — OSM Graph, Route Utility, Coordinator v0 (LangGraph + Groq)
 - [x] 02-03-PLAN.md — Read-Only API, Audit Persistence, Replay Script, Full Test Suite
+- [ ] 02-04-PLAN.md — (gap) Fire CA downwind convention and real spread metrics (CR-01, HI-02)
+- [ ] 02-05-PLAN.md — (gap) Full-edge fire exposure and rankable blocked routes (CR-02, HI-01)
+- [ ] 02-06-PLAN.md — (gap) Audit model_metadata, LLM gating, configurable model (PLAT-02, HI-05, MD-11)
+- [ ] 02-07-PLAN.md — (gap) Every cluster simulated, routes start outside fire (CR-03, HI-01)
+- [ ] 02-08-PLAN.md — (gap) Loopback-only Postgres/Redis, required password (HI-06)
+- [ ] 02-09-PLAN.md — (gap) Scoped weather lookup, no fabricated weather (HI-03, HI-04)
 
 ## Phase 3: Capacity-Aware Coordinated Planning
 
