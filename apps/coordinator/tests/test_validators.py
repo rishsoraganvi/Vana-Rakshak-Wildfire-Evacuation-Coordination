@@ -1,132 +1,35 @@
-"""Unit tests for the fire risk tool wiring and structural validators on the synthetic graph."""
+"""Unit tests for the structural validators V1-V7 and the fire risk tool wiring."""
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-
 from agent_fire.risk import assess_risk
-from coordinator.validators.route_checks import check_v1_paths, check_v2_blocked, check_v3_forecast
-from coordinator.validators.runner import ValidationContext, run_structural_validators
-from shapely.geometry import box
-from wildfire_core.geo.footprint import load_footprint
-from wildfire_core.schemas.plan import (
-    EvacueeGroup,
-    ForecastFootprint,
-    PlanRoute,
-    SettlementRecord,
-    ShelterCandidate,
+from coordinator.validators.capacity_checks import (
+    check_v4_capacity,
+    check_v5_complete,
+    check_v6_dispatches,
 )
-
-from tests.fixtures.graphs import build_synthetic_graph
-
-EMPTY = "POLYGON EMPTY"
-NODE_1 = (76.60, 11.68)
-NODE_8 = (76.61, 11.69)
-NODE_36 = (76.65, 11.73)
-
-
-def square(center: tuple[float, float], half_deg: float) -> str:
-    lon, lat = center
-    return box(lon - half_deg, lat - half_deg, lon + half_deg, lat + half_deg).wkt
-
-
-def footprint(**overrides: str) -> ForecastFootprint:
-    base = {
-        "current_wkt": EMPTY,
-        "p50_1h_wkt": EMPTY,
-        "p50_3h_wkt": EMPTY,
-        "p50_6h_wkt": EMPTY,
-        "p90_1h_wkt": EMPTY,
-        "p90_3h_wkt": EMPTY,
-        "p90_6h_wkt": EMPTY,
-    }
-    base.update(overrides)
-    return ForecastFootprint(**base)
-
-
-def make_route(
-    path: Sequence[int],
-    keys: Sequence[int] | None = None,
-    *,
-    group_id: str = "g1",
-    shelter_id: str = "s1",
-    persons: int = 40,
-    origin: int | None = None,
-    destination: int | None = None,
-) -> PlanRoute:
-    return PlanRoute(
-        group_id=group_id,
-        shelter_id=shelter_id,
-        persons=persons,
-        origin_node=path[0] if origin is None else origin,
-        destination_node=path[-1] if destination is None else destination,
-        osm_node_path=tuple(path),
-        osm_edge_keys=tuple(keys) if keys is not None else (0,) * (len(path) - 1),
-        total_distance_m=1000.0,
-        free_flow_time_s=100.0,
-        congested_time_s=100.0,
-        eta_min=2.0,
-        horizon_h=1,
-        path_rank=1,
-        risk_score=0.0,
-        safety_classification="safe",
-    )
-
-
-def make_group(group_id: str = "g1", persons: int = 40, origin: int | None = 1) -> EvacueeGroup:
-    return EvacueeGroup(
-        group_id=group_id,
-        settlement_id=group_id,
-        settlement_name=f"Settlement {group_id}",
-        persons=persons,
-        priority=1,
-        eta_min=30.0,
-        exposure="inside_p50_1h",
-        origin_node=origin,
-    )
-
-
-def make_candidate(
-    shelter_id: str = "s1", node: int | None = 15, available: int = 100
-) -> ShelterCandidate:
-    return ShelterCandidate(
-        shelter_id=shelter_id,
-        name=f"Shelter {shelter_id}",
-        kind="school",
-        lat=11.70,
-        lon=76.62,
-        usable_capacity=available,
-        occupancy=0,
-        available=available,
-        capacity_source="test",
-        node=node,
-    )
-
-
-def make_ctx(
-    fp: ForecastFootprint,
-    *,
-    edge_status: dict[tuple[int, int, int], str] | None = None,
-    groups: Sequence[EvacueeGroup] | None = None,
-    candidates: Sequence[ShelterCandidate] | None = None,
-    clusters: frozenset[str] = frozenset({"c1"}),
-) -> ValidationContext:
-    group_list = [make_group()] if groups is None else list(groups)
-    candidate_list = [make_candidate()] if candidates is None else list(candidates)
-    return ValidationContext(
-        graph=build_synthetic_graph(),
-        footprint=load_footprint(fp),
-        edge_status=edge_status or {},
-        groups={item.group_id: item for item in group_list},
-        candidates={item.shelter_id: item for item in candidate_list},
-        known_settlement_ids=frozenset(item.group_id for item in group_list),
-        known_shelter_ids=frozenset(item.shelter_id for item in candidate_list),
-        fire_cluster_ids=clusters,
-    )
-
-
-SAFE_PATH = (1, 2, 3, 9, 15)
-FIRE_PATH = (1, 7, 8, 9, 15)
+from coordinator.validators.integrity_checks import check_v7_entities
+from coordinator.validators.route_checks import check_v1_paths, check_v2_blocked, check_v3_forecast
+from coordinator.validators.runner import (
+    has_blocking_failure,
+    run_structural_validators,
+    violation_summary,
+)
+from validator_factory import (
+    FIRE_PATH,
+    NODE_1,
+    NODE_8,
+    NODE_36,
+    SAFE_PATH,
+    footprint,
+    make_assignment,
+    make_candidate,
+    make_ctx,
+    make_group,
+    make_route,
+    square,
+)
+from wildfire_core.schemas.plan import Dispatch, SettlementRecord, ValidationResult
 
 
 def test_forecast_to_group_to_route_verdict() -> None:
@@ -148,10 +51,18 @@ def test_forecast_to_group_to_route_verdict() -> None:
     assert 60 <= group.eta_min <= 180
     assert group.exposure == "inside_p50_3h"
 
-    route_fp = footprint(p50_1h_wkt=square(NODE_8, 0.002))
-    ctx = make_ctx(route_fp)
-    results = run_structural_validators(routes=[make_route(SAFE_PATH)], ctx=ctx)
-    assert [item.status for item in results] == ["pass", "pass", "pass"]
+    ctx = make_ctx(footprint(p50_1h_wkt=square(NODE_8, 0.002)))
+    results = run_structural_validators(
+        groups=[make_group()],
+        routes=[make_route(SAFE_PATH)],
+        assignments=[make_assignment()],
+        dispatches=[],
+        unassigned_reasons={},
+        ctx=ctx,
+        clusters_referenced=["c1"],
+    )
+    assert [item.validator_id for item in results] == ["V1", "V2", "V3", "V4", "V5", "V6", "V7"]
+    assert [item.status for item in results] == ["pass"] * 7
 
 
 def test_v3_fails_route_crossing_p50_within_first_hour() -> None:
@@ -205,3 +116,155 @@ def test_v3_flags_p90_hit_without_failing() -> None:
     result = check_v3_forecast([make_route(FIRE_PATH)], ctx)
     assert result.status == "flag"
     assert {item.code for item in result.violations} == {"p90_before_arrival"}
+
+
+def test_v4_passes_within_capacity_and_fails_over_capacity() -> None:
+    ctx = make_ctx(footprint(), candidates=[make_candidate(available=100)])
+    route = make_route(SAFE_PATH, persons=100)
+    ok = check_v4_capacity([make_assignment(persons=100)], [route], ctx)
+    assert ok.status == "pass"
+
+    groups = [make_group("g1", 70), make_group("g2", 60)]
+    ctx = make_ctx(footprint(), groups=groups, candidates=[make_candidate(available=100)])
+    routes = [
+        make_route(SAFE_PATH, group_id="g1", persons=70),
+        make_route(SAFE_PATH, group_id="g2", persons=60),
+    ]
+    over = check_v4_capacity(
+        [make_assignment("g1", persons=70), make_assignment("g2", persons=60)], routes, ctx
+    )
+    assert over.status == "fail"
+    assert [item.code for item in over.violations] == ["over_capacity"]
+    assert over.violations[0].shelter_id == "s1"
+    assert "s1" in over.reasons[0]
+
+
+def test_v4_fails_for_non_candidate_shelter_and_route_mismatch() -> None:
+    ctx = make_ctx(footprint(), candidates=[make_candidate("s1")])
+    stray = check_v4_capacity(
+        [make_assignment(shelter_id="zz", persons=10)],
+        [make_route(SAFE_PATH, shelter_id="zz", persons=10)],
+        ctx,
+    )
+    assert stray.status == "fail"
+    assert [item.code for item in stray.violations] == ["not_a_candidate"]
+
+    mismatch = check_v4_capacity(
+        [make_assignment(persons=40)], [make_route(SAFE_PATH, persons=30)], ctx
+    )
+    assert mismatch.status == "fail"
+    assert [item.code for item in mismatch.violations] == ["route_assignment_mismatch"]
+
+
+def test_v5_passes_when_every_group_is_fully_assigned() -> None:
+    groups = [make_group("g1", 40), make_group("g2", 25)]
+    split = [
+        make_assignment("g1", "s1", 30),
+        make_assignment("g1", "s2", 10),
+        make_assignment("g2", "s1", 25),
+    ]
+    assert check_v5_complete(groups, split, {}).status == "pass"
+
+
+def test_v5_names_unassigned_groups_with_residual_and_reason() -> None:
+    groups = [make_group("g1", 40), make_group("g2", 25)]
+    result = check_v5_complete(
+        groups,
+        [make_assignment("g1", persons=30)],
+        {"g1": "no_safe_route"},
+    )
+    assert result.status == "fail"
+    by_group = {item.group_id: item for item in result.violations}
+    assert set(by_group) == {"g1", "g2"}
+    assert {item.code for item in result.violations} == {"group_unassigned"}
+    assert "10 persons" in by_group["g1"].detail and "no_safe_route" in by_group["g1"].detail
+    assert "25 persons" in by_group["g2"].detail
+    assert "insufficient_capacity" in by_group["g2"].detail
+
+
+def test_v5_fails_over_assignment() -> None:
+    result = check_v5_complete([make_group("g1", 40)], [make_assignment("g1", persons=45)], {})
+    assert result.status == "fail"
+    assert [item.code for item in result.violations] == ["group_over_assigned"]
+
+
+def test_v6_empty_dispatches_pass_and_duplicate_vehicle_fails() -> None:
+    assert check_v6_dispatches([]).status == "pass"
+    first = Dispatch(vehicle_id="bus-1", task="evacuate", group_id="g1", eta_min=10)
+    second = Dispatch(vehicle_id="bus-2", task="evacuate", group_id="g2", eta_min=12)
+    assert check_v6_dispatches([first, second]).status == "pass"
+    clash = Dispatch(vehicle_id="bus-1", task="medical_standby", eta_min=5)
+    result = check_v6_dispatches([first, second, clash])
+    assert result.status == "fail"
+    assert [item.code for item in result.violations] == ["vehicle_double_booked"]
+    assert "bus-1" in result.reasons[0]
+
+
+def test_v7_passes_for_known_entities() -> None:
+    ctx = make_ctx(footprint())
+    result = check_v7_entities(
+        groups=[make_group()],
+        routes=[make_route(SAFE_PATH)],
+        assignments=[make_assignment()],
+        clusters_referenced=["c1"],
+        ctx=ctx,
+    )
+    assert result.status == "pass"
+
+
+def test_v7_fails_unknown_settlement_shelter_node_cluster_and_orphan_route() -> None:
+    ctx = make_ctx(footprint())
+    result = check_v7_entities(
+        groups=[make_group("ghost")],
+        routes=[
+            make_route(SAFE_PATH, shelter_id="nowhere"),
+            make_route((1, 2, 999), keys=(0, 0), destination=999),
+        ],
+        assignments=[make_assignment(shelter_id="nowhere")],
+        clusters_referenced=["c1", "c-ghost"],
+        ctx=ctx,
+    )
+    assert result.status == "fail"
+    codes = {item.code for item in result.violations}
+    assert codes == {
+        "unknown_settlement",
+        "unknown_shelter",
+        "unknown_node",
+        "unknown_cluster",
+        "route_without_assignment",
+    }
+
+
+def test_runner_returns_v1_to_v7_in_order_and_flags_blocking_failures() -> None:
+    ctx = make_ctx(footprint(p50_1h_wkt=square(NODE_8, 0.002)))
+    results = run_structural_validators(
+        groups=[make_group()],
+        routes=[make_route(FIRE_PATH)],
+        assignments=[make_assignment()],
+        dispatches=[],
+        unassigned_reasons={},
+        ctx=ctx,
+        clusters_referenced=["c1"],
+    )
+    assert [item.validator_id for item in results] == ["V1", "V2", "V3", "V4", "V5", "V6", "V7"]
+    assert has_blocking_failure(results)
+    assert not has_blocking_failure([ValidationResult(validator_id="V3", status="flag")])
+    assert not has_blocking_failure([ValidationResult(validator_id="V1", status="pass")])
+
+
+def test_violation_summary_counts_codes_and_carries_no_ids() -> None:
+    ctx = make_ctx(footprint(p50_1h_wkt=square(NODE_8, 0.002)))
+    results = run_structural_validators(
+        groups=[make_group("grp-uuid-123e4567")],
+        routes=[make_route(FIRE_PATH, group_id="grp-uuid-123e4567")],
+        assignments=[make_assignment("grp-uuid-123e4567")],
+        dispatches=[],
+        unassigned_reasons={},
+        ctx=ctx,
+        clusters_referenced=["c1"],
+    )
+    summary = violation_summary(results)
+    assert summary["V3:p50_before_arrival"] >= 1
+    flat = " ".join(summary)
+    assert "grp-uuid" not in flat and "s1" not in flat and "Settlement" not in flat
+    assert all(isinstance(count, int) and count > 0 for count in summary.values())
