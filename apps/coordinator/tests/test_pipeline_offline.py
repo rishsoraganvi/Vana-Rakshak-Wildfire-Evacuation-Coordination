@@ -8,6 +8,7 @@ from types import SimpleNamespace
 from uuid import UUID, uuid4
 
 import networkx as nx
+import pytest
 from coordinator import graph as coordinator_graph
 from coordinator.llm.groq_adapter import RationaleResult, base_model_metadata
 from coordinator.runner import build_graph
@@ -106,6 +107,7 @@ def test_coordinator_runs_all_nodes_with_incident_scoped_data(monkeypatch) -> No
         fire_grid_resolution_m=250,
         fire_ensemble_seeds=(42, 43, 44),
         route_fire_penalty_near=5.0,
+        weather_provider="open-meteo",
         llm_provider="groq",
         llm_model="test-model",
         llm_enabled=True,
@@ -129,7 +131,7 @@ def test_coordinator_runs_all_nodes_with_incident_scoped_data(monkeypatch) -> No
 
     monkeypatch.setattr(coordinator_graph, "_settings", lambda: settings)
     monkeypatch.setattr(coordinator_graph, "_engine_for", lambda _url: engine)
-    monkeypatch.setattr(coordinator_graph, "get_weather_snapshot", lambda *_args: weather)
+    monkeypatch.setattr(coordinator_graph, "get_weather_snapshot", lambda *_args, **_kwargs: weather)
     monkeypatch.setattr(coordinator_graph, "compute_fire_spread", _fire_result)
     monkeypatch.setattr(coordinator_graph, "load_or_download_graph", lambda *_args: graph)
     monkeypatch.setattr(
@@ -191,6 +193,7 @@ def test_coordinator_runs_all_nodes_with_incident_scoped_data(monkeypatch) -> No
 
 def test_generate_rationale_audit_records_metadata_when_inputs_unavailable(monkeypatch) -> None:
     settings = SimpleNamespace(
+        weather_provider="open-meteo",
         llm_provider="groq",
         llm_model="test-model",
         llm_enabled=True,
@@ -250,6 +253,7 @@ def _pipeline_settings(**overrides) -> SimpleNamespace:
         "fire_grid_resolution_m": 250,
         "fire_ensemble_seeds": (42, 43, 44),
         "route_fire_penalty_near": 5.0,
+        "weather_provider": "open-meteo",
         "llm_provider": "groq",
         "llm_model": "test-model",
         "llm_enabled": True,
@@ -355,7 +359,7 @@ def _install_pipeline(monkeypatch, *, engine, settings, graph, fire_fn, rational
     monkeypatch.setattr(coordinator_graph, "_settings", lambda: settings)
     monkeypatch.setattr(coordinator_graph, "_engine_for", lambda _url: engine)
     monkeypatch.setattr(
-        coordinator_graph, "get_weather_snapshot", lambda *_args: _pipeline_weather()
+        coordinator_graph, "get_weather_snapshot", lambda *_args, **_kwargs: _pipeline_weather()
     )
     monkeypatch.setattr(coordinator_graph, "compute_fire_spread", fire_fn)
     monkeypatch.setattr(coordinator_graph, "load_or_download_graph", lambda *_args: graph)
@@ -525,7 +529,7 @@ def test_offline_pipeline_with_real_ca_and_routing_on_fixture_graph(monkeypatch)
     monkeypatch.setattr(coordinator_graph, "_settings", lambda: settings)
     monkeypatch.setattr(coordinator_graph, "_engine_for", lambda _url: engine)
     monkeypatch.setattr(
-        coordinator_graph, "get_weather_snapshot", lambda *_args: _pipeline_weather()
+        coordinator_graph, "get_weather_snapshot", lambda *_args, **_kwargs: _pipeline_weather()
     )
     monkeypatch.setattr(
         coordinator_graph,
@@ -563,3 +567,76 @@ def test_offline_pipeline_with_real_ca_and_routing_on_fixture_graph(monkeypatch)
 
     assert engine.plan_parameters is not None
     assert len(final_state["audit_entries"]) == 8
+
+
+# ---------------------------------------------------------------------------
+# Plan 02-09: incident-scoped weather and no fabricated observation
+# ---------------------------------------------------------------------------
+
+
+def _weather_pipeline(monkeypatch, weather_fn):
+    rows, ids = _hotspot_rows([(11.72, 76.64), (11.74, 76.68)], counts=(2, 2))
+    engine = FakeEngine(rows, ids)
+    graph = _toy_graph(
+        {1: (76.64, 11.72), 2: (76.00, 11.72), 3: (77.30, 11.72)},
+        [(1, 2, 1000.0, 90.0), (1, 3, 1100.0, 100.0)],
+    )
+    _install_pipeline(
+        monkeypatch,
+        engine=engine,
+        settings=_pipeline_settings(dbscan_min_samples=2),
+        graph=graph,
+        fire_fn=_square_fire_fn(0.002, None, []),
+    )
+    monkeypatch.setattr(coordinator_graph, "get_weather_snapshot", weather_fn)
+    return engine, rows
+
+
+def test_run_weather_queries_incident_origin_and_hotspot_location(monkeypatch) -> None:
+    calls: list[tuple[tuple, dict]] = []
+
+    def recording_weather(*args, **kwargs):
+        calls.append((args, kwargs))
+        return _pipeline_weather()
+
+    _, rows = _weather_pipeline(monkeypatch, recording_weather)
+
+    build_graph().compile().invoke(_empty_state())
+
+    assert len(calls) == 1
+    args, kwargs = calls[0]
+    assert kwargs["origin"] == "replay"
+    assert kwargs["provider"] == "open-meteo"
+    assert args[0] == pytest.approx(sum(row["lat"] for row in rows) / len(rows))
+    assert args[1] == pytest.approx(sum(row["lon"] for row in rows) / len(rows))
+
+
+def test_weather_unavailable_skips_planning_without_fabrication(monkeypatch) -> None:
+    def unavailable(*_args, **_kwargs):
+        raise LookupError("No complete weather observation")
+
+    engine, _ = _weather_pipeline(monkeypatch, unavailable)
+
+    final_state = build_graph().compile().invoke(_empty_state())
+
+    assert final_state["weather_snapshot"] is None
+    assert final_state["fire_results"] == []
+    assert final_state["routes"] == []
+    assert final_state["error"] is not None
+    assert engine.plan_parameters is None
+    assert len(engine.audit_parameters) == 8
+    weather_entry = next(
+        entry for entry in final_state["audit_entries"] if entry["node_name"] == "run_weather"
+    )
+    outputs = json.loads(weather_entry["outputs_json"])
+    assert outputs["weather_snapshot"] is None
+    assert "valid_time" not in weather_entry["outputs_json"]
+    assert any(
+        "No weather observation was fabricated" in warning for warning in final_state["warnings"]
+    )
+    rationale_entry = next(
+        entry
+        for entry in final_state["audit_entries"]
+        if entry["node_name"] == "generate_rationale"
+    )
+    assert rationale_entry["model_metadata"]["fallback_reason"] == "inputs_unavailable"
