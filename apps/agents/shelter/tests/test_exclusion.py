@@ -18,8 +18,7 @@ M_PER_DEG_LON = 111_195.0 * math.cos(math.radians(LAT))
 
 def _box(west: float, south: float, east: float, north: float) -> str:
     return (
-        f"POLYGON(({west} {south}, {east} {south}, {east} {north}, "
-        f"{west} {north}, {west} {south}))"
+        f"POLYGON(({west} {south}, {east} {south}, {east} {north}, {west} {north}, {west} {south}))"
     )
 
 
@@ -98,9 +97,7 @@ def test_shelter_900m_outside_p90_6h_is_excluded_and_1500m_is_candidate() -> Non
 def test_current_perimeter_alone_also_excludes() -> None:
     footprint = _footprint(current=CURRENT, p90_6h=EMPTY)
     inside = _shelter("inside").model_copy(update={"lon": LON})
-    outside = _shelter("outside").model_copy(
-        update={"lon": LON + 0.002 + 1500 / M_PER_DEG_LON}
-    )
+    outside = _shelter("outside").model_copy(update={"lon": LON + 0.002 + 1500 / M_PER_DEG_LON})
     result = list_candidate_shelters(
         [inside, outside], footprint, buffer_m=1000, default_factor=0.6
     )

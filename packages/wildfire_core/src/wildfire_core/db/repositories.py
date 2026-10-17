@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import json
 from collections.abc import Sequence
+from datetime import datetime
 
 from sqlalchemy import Engine, func, text
 from sqlalchemy.dialects.postgresql import insert
 
 from wildfire_core.schemas.monitoring import HotspotObservation, WeatherObservation
 from wildfire_core.schemas.state import SharedState
-from wildfire_core.seed import ShelterSeedRow
+from wildfire_core.seed import SettlementSeedRow, ShelterSeedRow
 
 from .models import hotspots, weather_observations
 
@@ -154,3 +155,98 @@ def upsert_shelters(engine: Engine, rows: Sequence[ShelterSeedRow]) -> int:
                 },
             )
     return len(rows)
+
+
+_UPSERT_SETTLEMENTS_SQL = """
+    INSERT INTO settlements (
+        external_ref, name, kind, population, pop_source, geom, buffer_m, is_simulated
+    )
+    VALUES (
+        :external_ref, :name, :kind, :population, :pop_source,
+        ST_SetSRID(ST_MakePoint(:lon, :lat), 4326),
+        :buffer_m, :is_simulated
+    )
+    ON CONFLICT (external_ref) DO UPDATE SET
+        name = EXCLUDED.name,
+        kind = EXCLUDED.kind,
+        population = EXCLUDED.population,
+        pop_source = EXCLUDED.pop_source,
+        geom = EXCLUDED.geom,
+        buffer_m = EXCLUDED.buffer_m,
+        is_simulated = EXCLUDED.is_simulated
+"""
+
+
+def upsert_settlements(engine: Engine, rows: Sequence[SettlementSeedRow]) -> int:
+    """Idempotently load settlement seed rows keyed on external_ref."""
+    with engine.begin() as connection:
+        for row in rows:
+            connection.execute(
+                text(_UPSERT_SETTLEMENTS_SQL),
+                {
+                    "external_ref": row.external_ref,
+                    "name": row.name,
+                    "kind": row.kind,
+                    "population": row.population,
+                    "pop_source": row.pop_source,
+                    "lat": row.lat,
+                    "lon": row.lon,
+                    "buffer_m": row.buffer_m,
+                    "is_simulated": row.is_simulated,
+                },
+            )
+    return len(rows)
+
+
+def set_edge_status(
+    engine: Engine,
+    *,
+    osm_u: int,
+    osm_v: int,
+    osm_key: int,
+    status: str,
+    source: str,
+    incident_id: str | None,
+    valid_from: datetime,
+) -> None:
+    """Record an edge status observation (D-14 road_blocked, routing edge status)."""
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                """
+                INSERT INTO road_edge_status (
+                    osm_u, osm_v, osm_key, status, source, incident_id, valid_from
+                )
+                VALUES (
+                    :osm_u, :osm_v, :osm_key, :status, :source,
+                    CAST(:incident_id AS uuid), :valid_from
+                )
+                """
+            ),
+            {
+                "osm_u": osm_u,
+                "osm_v": osm_v,
+                "osm_key": osm_key,
+                "status": status,
+                "source": source,
+                "incident_id": incident_id,
+                "valid_from": valid_from,
+            },
+        )
+
+
+def current_edge_statuses(engine: Engine, now: datetime) -> dict[tuple[int, int, int], str]:
+    """Latest status per edge that is valid at ``now``."""
+    with engine.connect() as connection:
+        rows = connection.execute(
+            text(
+                """
+                SELECT DISTINCT ON (osm_u, osm_v, osm_key) osm_u, osm_v, osm_key, status
+                FROM road_edge_status
+                WHERE valid_from <= :now AND (valid_to IS NULL OR valid_to > :now)
+                ORDER BY osm_u, osm_v, osm_key, valid_from DESC, id DESC
+                """
+            ),
+            {"now": now},
+        ).all()
+    return {(int(r[0]), int(r[1]), int(r[2])): str(r[3]) for r in rows}
