@@ -1,14 +1,16 @@
 from __future__ import annotations
 
 import json
+import re
 import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from groq import Groq
 from groq.types.chat import ChatCompletionSystemMessageParam, ChatCompletionUserMessageParam
+from pydantic import BaseModel, ConfigDict, ValidationError
 from wildfire_core.config import Settings
 from wildfire_core.schemas.phase2 import FireSpreadResult, RouteResult, WeatherSnapshot
 
@@ -301,3 +303,155 @@ def generate_plan_rationale(plan_summary: Mapping[str, Any], settings: Settings)
         )
     except Exception as error:
         return fallback(f"error:{type(error).__name__}", llm_called=True)
+
+
+FIX_STRATEGY_MENU = ("next_path", "rematch", "split")
+_VIOLATION_KEY = re.compile(r"^V[1-8]:[a-z_]+$")
+
+
+class FixStrategyReply(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    strategy: Literal["next_path", "rematch", "split"]
+
+
+@dataclass(frozen=True)
+class FixStrategyChoice:
+    strategy: str | None
+    is_fallback: bool
+    model_metadata: dict[str, Any]
+
+
+def _parse_strategy(content: Any, allowed: Sequence[str]) -> tuple[str | None, str]:
+    """Return (strategy, status) with status ok, invalid or out_of_menu."""
+    if not isinstance(content, str):
+        return None, "invalid"
+    try:
+        return FixStrategyReply.model_validate_json(content).strategy, "ok"
+    except ValidationError:
+        pass
+    try:
+        raw = json.loads(content)
+    except ValueError:
+        return None, "invalid"
+    if isinstance(raw, dict) and set(raw) == {"strategy"} and isinstance(raw["strategy"], str):
+        return None, "out_of_menu"
+    return None, "invalid"
+
+
+def choose_fix_strategy(
+    *,
+    loop: int,
+    allowed: Sequence[str],
+    violation_counts: Mapping[str, int],
+    settings: Settings,
+) -> FixStrategyChoice:
+    """Ask the optional LLM to pick a repair strategy from the fixed menu (D-09, D-10).
+
+    Only an enum value can come back; targets are chosen deterministically by the resolver, so the
+    model can never invent ids or names (S4). The payload is the loop index, the allowed menu and
+    violation-code counts only. Any failure returns ``strategy=None`` so the caller falls back to
+    the deterministic order.
+    """
+    outside = [name for name in allowed if name not in FIX_STRATEGY_MENU]
+    if outside:
+        raise ValueError(f"allowed strategies must come from the fixed menu: {outside}")
+    for key, count in violation_counts.items():
+        if not _VIOLATION_KEY.fullmatch(key) or isinstance(count, bool) or count < 0:
+            raise ValueError(f"violation_counts must be Vn:code -> count, got {key!r}")
+
+    prompt_version = "fix_strategy_v1"
+    effort: str | None = None
+    repaired = False
+    usage: dict[str, int | None] | None = None
+    finish_reason: str | None = None
+    response_model: str | None = None
+
+    def result(strategy: str | None, *, llm_called: bool, reason: str | None) -> FixStrategyChoice:
+        metadata = {
+            **_metadata(
+                settings,
+                llm_called=llm_called,
+                is_fallback=strategy is None,
+                fallback_reason=reason,
+                finish_reason=finish_reason,
+                usage=usage,
+                response_model=response_model,
+                reasoning_effort=effort,
+            ),
+            "max_completion_tokens": settings.llm_control_max_tokens,
+            "temperature": settings.llm_control_temperature,
+            "prompt_version": prompt_version,
+            "repair_attempted": repaired,
+        }
+        return FixStrategyChoice(strategy, strategy is None, metadata)
+
+    if not allowed:
+        return result(None, llm_called=False, reason="empty_menu")
+    gate = _gate(settings)
+    if gate is not None:
+        return result(None, llm_called=False, reason=gate)
+
+    request_kwargs, effort = _reasoning_kwargs(settings)
+    try:
+        system_prompt, prompt_version = _load_prompt("fix_strategy_v1")
+        payload = {"loop": loop, "allowed": list(allowed), "violations": dict(violation_counts)}
+        messages: list[dict[str, str]] = [
+            {"role": "system", "content": system_prompt},
+            {
+                "role": "user",
+                "content": json.dumps(payload, sort_keys=True, separators=(",", ":")),
+            },
+        ]
+        response_format = {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "fix_strategy",
+                "strict": True,
+                "schema": {
+                    "type": "object",
+                    "properties": {"strategy": {"type": "string", "enum": list(allowed)}},
+                    "required": ["strategy"],
+                    "additionalProperties": False,
+                },
+            },
+        }
+        client = Groq(api_key=settings.groq_api_key.get_secret_value().strip())
+        time.sleep(1)
+        for attempt in range(2):
+            call_kwargs: dict[str, Any] = {
+                "model": settings.llm_model,
+                "messages": messages,
+                "response_format": response_format,
+                "temperature": settings.llm_control_temperature,
+                "max_completion_tokens": settings.llm_control_max_tokens,
+                "timeout": settings.llm_request_timeout_s,
+                **request_kwargs,
+            }
+            response = client.chat.completions.create(**call_kwargs)
+            choice = response.choices[0]
+            finish_reason = getattr(choice, "finish_reason", None)
+            response_model = getattr(response, "model", None)
+            usage = _usage(response)
+            content = choice.message.content
+            strategy, status = _parse_strategy(content, allowed)
+            if status == "ok" and strategy in allowed:
+                return result(strategy, llm_called=True, reason=None)
+            if status == "out_of_menu" or status == "ok":
+                return result(None, llm_called=True, reason="out_of_menu")
+            if attempt == 0:
+                repaired = True
+                messages = [
+                    *messages,
+                    {"role": "assistant", "content": content if isinstance(content, str) else ""},
+                    {
+                        "role": "user",
+                        "content": (
+                            'Invalid reply. Respond with only {"strategy": "<value>"} where the '
+                            f"value is one of {list(allowed)}."
+                        ),
+                    },
+                ]
+        return result(None, llm_called=True, reason="invalid_output")
+    except Exception as error:
+        return result(None, llm_called=True, reason=f"error:{type(error).__name__}")
