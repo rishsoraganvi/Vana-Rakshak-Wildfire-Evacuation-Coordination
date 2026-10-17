@@ -131,7 +131,8 @@ def test_full_pipeline_produces_draft_plan(
 
     fixture_path = Path("tests/fixtures/osm/bandipur_stub.graphml").resolve()
     monkeypatch.setenv("OSM_CACHE_PATH", str(fixture_path))
-    monkeypatch.setenv("LLM_MODEL", os.getenv("LLM_MODEL") or "llama3-8b-8192")
+    monkeypatch.setenv("LLM_ENABLED", "true")
+    monkeypatch.setenv("LLM_PROVIDER", "groq")
 
     state = run_coordinator(seeded_incident["incident_id"], seeded_incident["run_id"])
 
@@ -139,6 +140,12 @@ def test_full_pipeline_produces_draft_plan(
     assert len(state["audit_entries"]) == 8
     assert state["fire_result"] is not None
     assert state["rationale"]
+    rationale_entry = next(
+        entry for entry in state["audit_entries"] if entry["node_name"] == "generate_rationale"
+    )
+    assert state["is_llm_fallback"] is False, (
+        f"Groq call fell back: {rationale_entry['model_metadata']}"
+    )
 
     settings = load_settings()
     engine = create_db_engine(settings.database_url.get_secret_value())
@@ -156,6 +163,19 @@ def test_full_pipeline_produces_draft_plan(
             text("SELECT count(*) FROM agent_runs WHERE run_id = :run_id"),
             {"run_id": seeded_incident["run_id"]},
         ).scalar_one()
+        rationale_metadata = connection.execute(
+            text(
+                "SELECT model_metadata FROM agent_runs "
+                "WHERE run_id = :run_id AND node_name = 'generate_rationale'"
+            ),
+            {"run_id": seeded_incident["run_id"]},
+        ).scalar_one()
+    assert rationale_metadata is not None
+    if isinstance(rationale_metadata, str):
+        rationale_metadata = json.loads(rationale_metadata)
+    assert rationale_metadata["model"] == settings.llm_model
+    assert rationale_metadata["is_fallback"] is False
+    assert rationale_metadata["llm_called"] is True
     plan_data = plan["plan_data"]
     if isinstance(plan_data, str):
         plan_data = json.loads(plan_data)

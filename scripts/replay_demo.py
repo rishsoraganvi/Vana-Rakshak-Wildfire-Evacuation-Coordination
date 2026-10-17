@@ -131,6 +131,7 @@ def _print_summary(
     run_id: str,
     plan: dict[str, object],
     audit_count: int,
+    llm_metadata: dict[str, object],
 ) -> None:
     plan_data = plan["plan_data"]
     if isinstance(plan_data, str):
@@ -152,7 +153,11 @@ def _print_summary(
         f"{fire_result['affected_area_km2']} km2 affected"
     )
     print(f"  Routes        : {len(routes)} computed")
-    print(f"  LLM Fallback  : {'Yes' if plan_data.get('is_llm_fallback') else 'No'}")
+    print(f"  LLM Model     : {llm_metadata.get('provider')}/{llm_metadata.get('model')}")
+    if plan_data.get("is_llm_fallback"):
+        print(f"  LLM Fallback  : Yes ({llm_metadata.get('fallback_reason')})")
+    else:
+        print("  LLM Fallback  : No")
     print(f"  Warnings      : {len(warnings)}")
     print(f"  Audit entries : {audit_count}")
     print("-" * 65)
@@ -164,8 +169,9 @@ def _print_summary(
 def main() -> int:
     load_dotenv(ROOT / ".env")
     os.environ["OSM_CACHE_PATH"] = str(FIXTURE_PATH)
-    if not os.environ.get("LLM_MODEL"):
-        os.environ["LLM_MODEL"] = "llama3-8b-8192"
+    # The demo is the Groq demo (D-08/D-15); an operator export of LLM_ENABLED=false wins.
+    os.environ.setdefault("LLM_ENABLED", "true")
+    os.environ.setdefault("LLM_PROVIDER", "groq")
 
     try:
         from coordinator.runner import run_coordinator
@@ -173,6 +179,10 @@ def main() -> int:
         from wildfire_core.db.session import create_db_engine
 
         settings = load_settings()
+        if not settings.llm_model.strip():
+            raise RuntimeError(
+                "LLM model is not configured; set llm_model in config/defaults.yaml or LLM_MODEL"
+            )
         if not settings.groq_api_key.get_secret_value().strip():
             raise RuntimeError(
                 "GROQ_API_KEY is required; set it in .env or the process environment"
@@ -202,7 +212,22 @@ def main() -> int:
                 text("SELECT count(*) FROM agent_runs WHERE run_id = :run_id"),
                 {"run_id": run_id},
             ).scalar_one()
-        _print_summary(incident_id, run_id, plan, int(audit_count))
+            metadata_row = connection.execute(
+                text(
+                    "SELECT model_metadata FROM agent_runs "
+                    "WHERE run_id = :run_id AND node_name = 'generate_rationale'"
+                ),
+                {"run_id": run_id},
+            ).scalar_one_or_none()
+        llm_metadata = (
+            json.loads(metadata_row) if isinstance(metadata_row, str) else metadata_row
+        ) or {}
+        _print_summary(incident_id, run_id, plan, int(audit_count), llm_metadata)
+        if settings.llm_enabled and llm_metadata.get("is_fallback", True):
+            print(
+                f"WARNING: LLM fell back: {llm_metadata.get('fallback_reason')}",
+                file=sys.stderr,
+            )
         engine.dispose()
         return 0
     except Exception:
