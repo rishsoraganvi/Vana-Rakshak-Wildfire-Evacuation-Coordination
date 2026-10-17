@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 current_phase: 03
 status: executing
-stopped_at: Completed 03-09-PLAN.md
-last_updated: "2026-10-17T14:56:53.973Z"
-state_head: b505b8d84175490edd94e29a8d1e80379d2348c0
+stopped_at: Completed 03-10-PLAN.md
+last_updated: "2026-10-17T15:24:03.306Z"
+state_head: ac71fed511bc2ef0c219042a79eea1e2d3c736c7
 progress:
   total_phases: 6
   completed_phases: 2
   total_plans: 24
-  completed_plans: 21
+  completed_plans: 22
   percent: 50
 current_phase_name: Capacity-Aware Coordinated Planning
 ---
@@ -28,10 +28,10 @@ See: `.planning/PROJECT.md` (updated 2026-10-01)
 Current Phase: 03
 
 - Phase: 3 of 6 (executing)
-- Current Plan: 10 of 12 (03-01..03-09 done; next is 03-10)
-- Status: Plan 03-09 complete; Phase 2 verification human_needed (2 non-blocking UAT items)
-- Progress: 75% of Phase 3 (9/12 plans)
-- Last activity: Plan 03-09 executed - deterministic planning core (pure library): PlanningParams, build_assignment (min-cost flow over ETA-aware costs, first safe of k=3 paths, up to 3 MSA-damped BPR passes with early stop), plan_draft (preflight fail-closed, zero-group valid draft, V1-V7 gate), bounded resolver (range(conflict_max_loops), fixed next_path/rematch/split order or enum-only LLM choice, ResolverStep per loop), greedy fallback planner, failed drafts naming unplaceable groups; Hypothesis capacity/completeness/loop-cap/determinism properties and a validate-every-producer spy; fixed fix-menu key regex that rejected V3 codes with digits (graph.py not yet wired, 03-10 must call plan_draft and pass clusters via PlanInputs). Previously: Plan 03-08 executed - versioned immutable plan persistence: PlanningRepository (SQL + in-memory twin), persist_plan under pg_advisory_xact_lock with state_version check and FOR SHARE capacity re-check, shared_state_snapshots, material-change signature/plan_diff (D-16), SharedState TechSpec 5 sections, ADR-002; immutability trigger proven live (graph.py still uses the old assemble_plan SQL until 03-10). Previously: Plan 03-06 executed - Fire assess_risk (groups with interpolated ETA/priority, needs_rescue_response, p90_only_exposure, unknown_population) and pure validators V1-V7 with ValidationContext, run_structural_validators, has_blocking_failure, violation_summary; Hypothesis iff-properties for V4/V5/V6 (V1-V7 NOT yet wired into a pipeline; plan 03-10 must pass clusters_referenced). Previously: Plan 03-07 executed - plan assembly: finalize_plan (S5 gate, failed vs pending_review, as_failed), strict V8 grounding with template replacement, build_freshness/build_provenance, generate_plan_rationale and enum-only choose_fix_strategy with strict json_schema (all Groq calls mocked in tests). Previously: Plan 03-05 executed - routing upgraded: per-horizon fire costs on a single STRtree pass, edge-status blocking, settlement-to-shelter cost matrix on the nearest-horizon rule, per-edge exposure evaluation, lazy k=3 Yen on a collapsed DiGraph, BPR congestion with MSA, load-only graph loader (GraphNotBuiltError) and scripts/build_osm_graph.py (written and unit-tested, NOT run). Previously: Plan 03-04 executed - migration 0006 applied (head 0006: shelters, shelter_occupancy, failed status, plan_versions provenance + immutability trigger, road_edge_status), labelled synthetic seed (20 shelters, 10 settlements) loaded, shelter registry with exact usable capacity, perimeter exclusion and atomic update_occupancy. Previously: Plan 03-03 executed - WR-03 fixed (parse_open_meteo splits observations from forecasts with a required origin; hotspot-trigger incidents carry the real origin). Previously: Plan 03-02 executed - Phase 3 contracts (IntegratedPlan S5/D-11 invariants, ToolResult), shared nearest-horizon rule, footprint unions, validated Phase 3 config block
+- Current Plan: 11 of 12 (03-01..03-10 done; next is 03-11)
+- Status: Plan 03-10 complete; Phase 2 verification human_needed (2 non-blocking UAT items)
+- Progress: 83% of Phase 3 (10/12 plans)
+- Last activity: Plan 03-10 executed - ten-node Phase 3 coordinator over injected CoordinatorDeps (no SQL in nodes): per-cluster weather that fails the plan closed naming the cluster (WR-01, D-21), assess_risk, run_specialists (asyncio.gather + to_thread + wait_for on a private loop, ToolResult envelope, shelter/traffic_routing audit rows), plan_draft + grounded rationale + finalize_plan, material-change gated persist_plan (replan_no_change), audit flush then mark_trigger_handled, run_failed flush on a crashed run, age_min on every weather snapshot, Phase 2 coordinator tests migrated; live audit-agent test green (replay demo and live integration test still target the Phase 2 state shape until 03-11). Previously: Plan 03-09 executed - deterministic planning core (pure library): PlanningParams, build_assignment (min-cost flow over ETA-aware costs, first safe of k=3 paths, up to 3 MSA-damped BPR passes with early stop), plan_draft (preflight fail-closed, zero-group valid draft, V1-V7 gate), bounded resolver (range(conflict_max_loops), fixed next_path/rematch/split order or enum-only LLM choice, ResolverStep per loop), greedy fallback planner, failed drafts naming unplaceable groups; Hypothesis capacity/completeness/loop-cap/determinism properties and a validate-every-producer spy; fixed fix-menu key regex that rejected V3 codes with digits (graph.py not yet wired, 03-10 must call plan_draft and pass clusters via PlanInputs). Previously: Plan 03-08 executed - versioned immutable plan persistence: PlanningRepository (SQL + in-memory twin), persist_plan under pg_advisory_xact_lock with state_version check and FOR SHARE capacity re-check, shared_state_snapshots, material-change signature/plan_diff (D-16), SharedState TechSpec 5 sections, ADR-002; immutability trigger proven live (graph.py still uses the old assemble_plan SQL until 03-10). Previously: Plan 03-06 executed - Fire assess_risk (groups with interpolated ETA/priority, needs_rescue_response, p90_only_exposure, unknown_population) and pure validators V1-V7 with ValidationContext, run_structural_validators, has_blocking_failure, violation_summary; Hypothesis iff-properties for V4/V5/V6 (V1-V7 NOT yet wired into a pipeline; plan 03-10 must pass clusters_referenced). Previously: Plan 03-07 executed - plan assembly: finalize_plan (S5 gate, failed vs pending_review, as_failed), strict V8 grounding with template replacement, build_freshness/build_provenance, generate_plan_rationale and enum-only choose_fix_strategy with strict json_schema (all Groq calls mocked in tests). Previously: Plan 03-05 executed - routing upgraded: per-horizon fire costs on a single STRtree pass, edge-status blocking, settlement-to-shelter cost matrix on the nearest-horizon rule, per-edge exposure evaluation, lazy k=3 Yen on a collapsed DiGraph, BPR congestion with MSA, load-only graph loader (GraphNotBuiltError) and scripts/build_osm_graph.py (written and unit-tested, NOT run). Previously: Plan 03-04 executed - migration 0006 applied (head 0006: shelters, shelter_occupancy, failed status, plan_versions provenance + immutability trigger, road_edge_status), labelled synthetic seed (20 shelters, 10 settlements) loaded, shelter registry with exact usable capacity, perimeter exclusion and atomic update_occupancy. Previously: Plan 03-03 executed - WR-03 fixed (parse_open_meteo splits observations from forecasts with a required origin; hotspot-trigger incidents carry the real origin). Previously: Plan 03-02 executed - Phase 3 contracts (IntegratedPlan S5/D-11 invariants, ToolResult), shared nearest-horizon rule, footprint unions, validated Phase 3 config block
 
 ## Decisions and Constraints
 
@@ -70,8 +70,8 @@ Complete the 2 Phase 2 UAT items with `/gsd-verify-work 2` (02-UAT.md). Operator
 
 ## Session
 
-**Last session:** 2026-10-17T14:56:52.678Z
-**Stopped at:** Completed 03-09-PLAN.md
+**Last session:** 2026-10-17T15:24:02.089Z
+**Stopped at:** Completed 03-10-PLAN.md
 **Resume file:** None
 
 ## Performance Metrics
@@ -91,6 +91,7 @@ Complete the 2 Phase 2 UAT items with `/gsd-verify-work 2` (02-UAT.md). Operator
 | Phase 03 P07 | 40min | 3 tasks | 14 files |
 | Phase 03 P08 | 55min | 3 tasks | 7 files |
 | Phase 03 P09 | 55min | 3 tasks | 11 files |
+| Phase 03 P10 | 60min | 3 tasks | 17 files |
 
 ## Decisions
 
@@ -104,3 +105,4 @@ Complete the 2 Phase 2 UAT items with `/gsd-verify-work 2` (02-UAT.md). Operator
 - [Phase 3]: 03-02: IntegratedPlan enforces S5 (pending_review needs V1..V8 in order, none failing) and D-11 (failed plan has no routes/assignments, needs a reason) in the schema; freshness/provenance required; nearest_horizon_h ties go later; Settings rejects any fix_menu_order other than next_path/rematch/split
 - [Phase 3]: 03-03: WR-03 fixed - parse_open_meteo requires an origin and sets is_forecast = valid_time > issued_at; record_new_hotspot_trigger requires a validated origin bound via CAST(:origin AS data_origin); both allow-lists derive from wildfire_core Origin
 - [Phase 3]: 03-05: horizon costs come from one shapely STRtree per perimeter (no per-edge loops); cost matrix picks the horizon from free-flow time via wildfire_core nearest_horizon_h, evaluate_path from end-of-edge arrival (same rule as V3); load_graph never downloads and the real OSM build is the human-run scripts/build_osm_graph.py (plan 03-12 checkpoint); graph builds fall back to a 30 km/h speed only when the extract has no maxspeed tags
+- [Phase 03]: [Phase 3]: 03-10: coordinator is ten nodes over injected CoordinatorDeps (no SQL in nodes); run_specialists closes a private loop so a timed-out specialist cannot hold the run; per-cluster weather fails the plan closed naming the cluster; shelters snap away from group origin nodes; write_audit flushes before mark_trigger_handled; a crashed run flushes audit plus run_failed
