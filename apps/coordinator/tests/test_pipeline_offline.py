@@ -9,6 +9,7 @@ from uuid import UUID, uuid4
 
 import networkx as nx
 from coordinator import graph as coordinator_graph
+from coordinator.llm.groq_adapter import RationaleResult, base_model_metadata
 from coordinator.runner import build_graph
 from pydantic import SecretStr
 from wildfire_core.config import BBox
@@ -103,6 +104,11 @@ def test_coordinator_runs_all_nodes_with_incident_scoped_data(monkeypatch) -> No
         fire_grid_resolution_m=250,
         fire_ensemble_seeds=(42, 43, 44),
         route_fire_penalty_near=5.0,
+        llm_provider="groq",
+        llm_model="test-model",
+        llm_enabled=True,
+        llm_rationale_max_tokens=400,
+        llm_request_timeout_s=30,
     )
     weather = WeatherSnapshot(
         valid_time=datetime.now(UTC),
@@ -127,7 +133,11 @@ def test_coordinator_runs_all_nodes_with_incident_scoped_data(monkeypatch) -> No
     monkeypatch.setattr(
         coordinator_graph,
         "generate_rationale",
-        lambda *_args: ("Grounded replay rationale", False),
+        lambda *_args: RationaleResult(
+            text="Grounded replay rationale",
+            is_fallback=False,
+            model_metadata={**base_model_metadata(settings), "llm_called": True},
+        ),
     )
 
     initial_state = {
@@ -160,6 +170,48 @@ def test_coordinator_runs_all_nodes_with_incident_scoped_data(monkeypatch) -> No
     )
     assert engine.plan_parameters["is_simulated"] is True
     assert len(engine.audit_parameters) == 8
+
+    rationale_entries = [
+        entry for entry in final_state["audit_entries"] if entry["node_name"] == "generate_rationale"
+    ]
+    assert len(rationale_entries) == 1
+    assert rationale_entries[0]["model_metadata"]["model"] == "test-model"
+    rows_by_node = {row["node_name"]: row for row in engine.audit_parameters}
+    metadata_text = rows_by_node["generate_rationale"]["model_metadata"]
+    assert isinstance(metadata_text, str)
+    assert json.loads(metadata_text)["model"] == "test-model"
+    others = [row for name, row in rows_by_node.items() if name != "generate_rationale"]
+    assert len(others) == 7
+    assert all(row["model_metadata"] is None for row in others)
+
+
+def test_generate_rationale_audit_records_metadata_when_inputs_unavailable(monkeypatch) -> None:
+    settings = SimpleNamespace(
+        llm_provider="groq",
+        llm_model="test-model",
+        llm_enabled=True,
+        llm_rationale_max_tokens=400,
+        llm_request_timeout_s=30,
+    )
+    monkeypatch.setattr(coordinator_graph, "_settings", lambda: settings)
+    state = {
+        "incident_id": str(uuid4()),
+        "run_id": str(uuid4()),
+        "fire_result": None,
+        "weather_snapshot": None,
+        "routes": [],
+        "rationale": "",
+        "is_llm_fallback": False,
+        "audit_entries": [],
+    }
+
+    coordinator_graph.generate_rationale_node(state)
+
+    metadata = state["audit_entries"][0]["model_metadata"]
+    assert metadata["fallback_reason"] == "inputs_unavailable"
+    assert metadata["llm_called"] is False
+    assert metadata["is_fallback"] is True
+    assert metadata["model"] == "test-model"
 
 
 def _fire_result(cluster, _weather, **_kwargs) -> FireSpreadResult:
