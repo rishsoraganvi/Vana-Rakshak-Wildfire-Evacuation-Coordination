@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 current_phase: 03
 status: executing
-stopped_at: Completed 03-08-PLAN.md
-last_updated: "2026-10-17T14:31:26.636Z"
-state_head: 66e2e8d52be91de8520efbea0c3424df2c7918fb
+stopped_at: Completed 03-09-PLAN.md
+last_updated: "2026-10-17T14:56:53.973Z"
+state_head: b505b8d84175490edd94e29a8d1e80379d2348c0
 progress:
   total_phases: 6
   completed_phases: 2
   total_plans: 24
-  completed_plans: 20
+  completed_plans: 21
   percent: 50
 current_phase_name: Capacity-Aware Coordinated Planning
 ---
@@ -28,10 +28,10 @@ See: `.planning/PROJECT.md` (updated 2026-10-01)
 Current Phase: 03
 
 - Phase: 3 of 6 (executing)
-- Current Plan: 9 of 12 (03-01..03-08 done; next is 03-09)
-- Status: Plan 03-08 complete; Phase 2 verification human_needed (2 non-blocking UAT items)
-- Progress: 67% of Phase 3 (8/12 plans)
-- Last activity: Plan 03-08 executed - versioned immutable plan persistence: PlanningRepository (SQL + in-memory twin), persist_plan under pg_advisory_xact_lock with state_version check and FOR SHARE capacity re-check, shared_state_snapshots, material-change signature/plan_diff (D-16), SharedState TechSpec 5 sections, ADR-002; immutability trigger proven live (graph.py still uses the old assemble_plan SQL until 03-10). Previously: Plan 03-06 executed - Fire assess_risk (groups with interpolated ETA/priority, needs_rescue_response, p90_only_exposure, unknown_population) and pure validators V1-V7 with ValidationContext, run_structural_validators, has_blocking_failure, violation_summary; Hypothesis iff-properties for V4/V5/V6 (V1-V7 NOT yet wired into a pipeline; plan 03-10 must pass clusters_referenced). Previously: Plan 03-07 executed - plan assembly: finalize_plan (S5 gate, failed vs pending_review, as_failed), strict V8 grounding with template replacement, build_freshness/build_provenance, generate_plan_rationale and enum-only choose_fix_strategy with strict json_schema (all Groq calls mocked in tests). Previously: Plan 03-05 executed - routing upgraded: per-horizon fire costs on a single STRtree pass, edge-status blocking, settlement-to-shelter cost matrix on the nearest-horizon rule, per-edge exposure evaluation, lazy k=3 Yen on a collapsed DiGraph, BPR congestion with MSA, load-only graph loader (GraphNotBuiltError) and scripts/build_osm_graph.py (written and unit-tested, NOT run). Previously: Plan 03-04 executed - migration 0006 applied (head 0006: shelters, shelter_occupancy, failed status, plan_versions provenance + immutability trigger, road_edge_status), labelled synthetic seed (20 shelters, 10 settlements) loaded, shelter registry with exact usable capacity, perimeter exclusion and atomic update_occupancy. Previously: Plan 03-03 executed - WR-03 fixed (parse_open_meteo splits observations from forecasts with a required origin; hotspot-trigger incidents carry the real origin). Previously: Plan 03-02 executed - Phase 3 contracts (IntegratedPlan S5/D-11 invariants, ToolResult), shared nearest-horizon rule, footprint unions, validated Phase 3 config block
+- Current Plan: 10 of 12 (03-01..03-09 done; next is 03-10)
+- Status: Plan 03-09 complete; Phase 2 verification human_needed (2 non-blocking UAT items)
+- Progress: 75% of Phase 3 (9/12 plans)
+- Last activity: Plan 03-09 executed - deterministic planning core (pure library): PlanningParams, build_assignment (min-cost flow over ETA-aware costs, first safe of k=3 paths, up to 3 MSA-damped BPR passes with early stop), plan_draft (preflight fail-closed, zero-group valid draft, V1-V7 gate), bounded resolver (range(conflict_max_loops), fixed next_path/rematch/split order or enum-only LLM choice, ResolverStep per loop), greedy fallback planner, failed drafts naming unplaceable groups; Hypothesis capacity/completeness/loop-cap/determinism properties and a validate-every-producer spy; fixed fix-menu key regex that rejected V3 codes with digits (graph.py not yet wired, 03-10 must call plan_draft and pass clusters via PlanInputs). Previously: Plan 03-08 executed - versioned immutable plan persistence: PlanningRepository (SQL + in-memory twin), persist_plan under pg_advisory_xact_lock with state_version check and FOR SHARE capacity re-check, shared_state_snapshots, material-change signature/plan_diff (D-16), SharedState TechSpec 5 sections, ADR-002; immutability trigger proven live (graph.py still uses the old assemble_plan SQL until 03-10). Previously: Plan 03-06 executed - Fire assess_risk (groups with interpolated ETA/priority, needs_rescue_response, p90_only_exposure, unknown_population) and pure validators V1-V7 with ValidationContext, run_structural_validators, has_blocking_failure, violation_summary; Hypothesis iff-properties for V4/V5/V6 (V1-V7 NOT yet wired into a pipeline; plan 03-10 must pass clusters_referenced). Previously: Plan 03-07 executed - plan assembly: finalize_plan (S5 gate, failed vs pending_review, as_failed), strict V8 grounding with template replacement, build_freshness/build_provenance, generate_plan_rationale and enum-only choose_fix_strategy with strict json_schema (all Groq calls mocked in tests). Previously: Plan 03-05 executed - routing upgraded: per-horizon fire costs on a single STRtree pass, edge-status blocking, settlement-to-shelter cost matrix on the nearest-horizon rule, per-edge exposure evaluation, lazy k=3 Yen on a collapsed DiGraph, BPR congestion with MSA, load-only graph loader (GraphNotBuiltError) and scripts/build_osm_graph.py (written and unit-tested, NOT run). Previously: Plan 03-04 executed - migration 0006 applied (head 0006: shelters, shelter_occupancy, failed status, plan_versions provenance + immutability trigger, road_edge_status), labelled synthetic seed (20 shelters, 10 settlements) loaded, shelter registry with exact usable capacity, perimeter exclusion and atomic update_occupancy. Previously: Plan 03-03 executed - WR-03 fixed (parse_open_meteo splits observations from forecasts with a required origin; hotspot-trigger incidents carry the real origin). Previously: Plan 03-02 executed - Phase 3 contracts (IntegratedPlan S5/D-11 invariants, ToolResult), shared nearest-horizon rule, footprint unions, validated Phase 3 config block
 
 ## Decisions and Constraints
 
@@ -70,8 +70,8 @@ Complete the 2 Phase 2 UAT items with `/gsd-verify-work 2` (02-UAT.md). Operator
 
 ## Session
 
-**Last session:** 2026-10-17T14:31:25.415Z
-**Stopped at:** Completed 03-08-PLAN.md
+**Last session:** 2026-10-17T14:56:52.678Z
+**Stopped at:** Completed 03-09-PLAN.md
 **Resume file:** None
 
 ## Performance Metrics
@@ -90,6 +90,7 @@ Complete the 2 Phase 2 UAT items with `/gsd-verify-work 2` (02-UAT.md). Operator
 | Phase 03 P05 | 50min | 3 tasks | 12 files |
 | Phase 03 P07 | 40min | 3 tasks | 14 files |
 | Phase 03 P08 | 55min | 3 tasks | 7 files |
+| Phase 03 P09 | 55min | 3 tasks | 11 files |
 
 ## Decisions
 
