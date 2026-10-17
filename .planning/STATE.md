@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 current_phase: 03
 status: executing
-stopped_at: Completed 03-07-PLAN.md
+stopped_at: Completed 03-06-PLAN.md
 last_updated: "2026-10-17T13:59:14.353Z"
 state_head: 045e79cb10c9c527eeec8ad5e94e44c52c9a3fb8
 progress:
   total_phases: 6
   completed_phases: 2
   total_plans: 24
-  completed_plans: 18
+  completed_plans: 19
   percent: 50
 current_phase_name: Capacity-Aware Coordinated Planning
 ---
@@ -28,10 +28,10 @@ See: `.planning/PROJECT.md` (updated 2026-10-01)
 Current Phase: 03
 
 - Phase: 3 of 6 (executing)
-- Current Plan: 6 of 12 (03-06 not yet executed; 03-07 done out of order, it does not depend on 03-06)
-- Status: Plan 03-07 complete; Phase 2 verification human_needed (2 non-blocking UAT items)
-- Progress: 50% of Phase 3 (6/12 plans)
-- Last activity: Plan 03-07 executed - plan assembly: finalize_plan (S5 gate, failed vs pending_review, as_failed), strict V8 grounding with template replacement, build_freshness/build_provenance, generate_plan_rationale and enum-only choose_fix_strategy with strict json_schema (all Groq calls mocked in tests). Previously: Plan 03-05 executed - routing upgraded: per-horizon fire costs on a single STRtree pass, edge-status blocking, settlement-to-shelter cost matrix on the nearest-horizon rule, per-edge exposure evaluation, lazy k=3 Yen on a collapsed DiGraph, BPR congestion with MSA, load-only graph loader (GraphNotBuiltError) and scripts/build_osm_graph.py (written and unit-tested, NOT run). Previously: Plan 03-04 executed - migration 0006 applied (head 0006: shelters, shelter_occupancy, failed status, plan_versions provenance + immutability trigger, road_edge_status), labelled synthetic seed (20 shelters, 10 settlements) loaded, shelter registry with exact usable capacity, perimeter exclusion and atomic update_occupancy. Previously: Plan 03-03 executed - WR-03 fixed (parse_open_meteo splits observations from forecasts with a required origin; hotspot-trigger incidents carry the real origin). Previously: Plan 03-02 executed - Phase 3 contracts (IntegratedPlan S5/D-11 invariants, ToolResult), shared nearest-horizon rule, footprint unions, validated Phase 3 config block
+- Current Plan: 8 of 12 (03-01..03-07 done; next is 03-08)
+- Status: Plan 03-06 complete; Phase 2 verification human_needed (2 non-blocking UAT items)
+- Progress: 58% of Phase 3 (7/12 plans)
+- Last activity: Plan 03-06 executed - Fire assess_risk (groups with interpolated ETA/priority, needs_rescue_response, p90_only_exposure, unknown_population) and pure validators V1-V7 with ValidationContext, run_structural_validators, has_blocking_failure, violation_summary; Hypothesis iff-properties for V4/V5/V6 (V1-V7 NOT yet wired into a pipeline; plan 03-10 must pass clusters_referenced). Previously: Plan 03-07 executed - plan assembly: finalize_plan (S5 gate, failed vs pending_review, as_failed), strict V8 grounding with template replacement, build_freshness/build_provenance, generate_plan_rationale and enum-only choose_fix_strategy with strict json_schema (all Groq calls mocked in tests). Previously: Plan 03-05 executed - routing upgraded: per-horizon fire costs on a single STRtree pass, edge-status blocking, settlement-to-shelter cost matrix on the nearest-horizon rule, per-edge exposure evaluation, lazy k=3 Yen on a collapsed DiGraph, BPR congestion with MSA, load-only graph loader (GraphNotBuiltError) and scripts/build_osm_graph.py (written and unit-tested, NOT run). Previously: Plan 03-04 executed - migration 0006 applied (head 0006: shelters, shelter_occupancy, failed status, plan_versions provenance + immutability trigger, road_edge_status), labelled synthetic seed (20 shelters, 10 settlements) loaded, shelter registry with exact usable capacity, perimeter exclusion and atomic update_occupancy. Previously: Plan 03-03 executed - WR-03 fixed (parse_open_meteo splits observations from forecasts with a required origin; hotspot-trigger incidents carry the real origin). Previously: Plan 03-02 executed - Phase 3 contracts (IntegratedPlan S5/D-11 invariants, ToolResult), shared nearest-horizon rule, footprint unions, validated Phase 3 config block
 
 ## Decisions and Constraints
 
