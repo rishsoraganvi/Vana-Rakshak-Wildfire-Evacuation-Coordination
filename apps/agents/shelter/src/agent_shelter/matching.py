@@ -13,6 +13,7 @@ import math
 from collections.abc import Mapping
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, field
+from typing import Any
 
 import networkx as nx
 
@@ -89,7 +90,7 @@ def match_groups_to_shelters(
     total = sum(groups.values())
     big = (len(groups) + len(available) + 1) * (max_weight + 1) + 1
 
-    graph: nx.DiGraph = nx.DiGraph()
+    graph: nx.DiGraph[Any] = nx.DiGraph()
     graph.add_node(_SOURCE, demand=-total)
     graph.add_node(_SINK, demand=total)
     graph.add_edge(_UNASSIGNED, _SINK, capacity=total, weight=0)
@@ -120,8 +121,8 @@ def match_groups_to_shelters(
                 continue
             if node == _UNASSIGNED:
                 unassigned[group_id] = int(amount)
-            else:
-                shelter_id = node[1]
+            elif isinstance(node, tuple):
+                shelter_id = str(node[1])
                 legs[(group_id, shelter_id)] = int(amount)
                 total_cost_ds += int(amount) * weights[(group_id, shelter_id)]
 
