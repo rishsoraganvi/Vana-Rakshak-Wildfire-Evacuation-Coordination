@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 current_phase: 2
 status: ready_to_execute
-stopped_at: Completed 02-08-PLAN.md
+stopped_at: Completed 02-09-PLAN.md
 last_updated: "2026-10-17T06:00:00.000Z"
 state_head: e12e27b781bd3c9fee032fd185c14a36d253b72c
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 12
-  completed_plans: 11
+  completed_plans: 12
   percent: 21
 ---
 
@@ -30,7 +30,7 @@ Current Phase: 2
 - Current Plan: 3 of 3
 - Status: All plans complete; Phase 2 verification pending
 - Progress: 100% of Phase 2 (3/3 plans); 33% of milestone
-- Last activity: Plan 02-08 executed - loopback-only Postgres/Redis ports, required POSTGRES_PASSWORD, password-free config defaults (HI-06)
+- Last activity: Plan 02-09 executed - weather lookup scoped by location/provider/origin/time, no fabricated weather (HI-03, HI-04)
 
 ## Decisions and Constraints
 
@@ -58,6 +58,7 @@ Current Phase: 2
 - Existing `agent_runs` is extended additively, with full CoordinatorPlan JSON stored in `plan_versions.plan_data`.
 - Trigger details retain exact hotspot IDs so Coordinator observations remain incident-scoped.
 - HI-06: compose publishes Postgres/Redis on 127.0.0.1 only and requires POSTGRES_PASSWORD; app config defaults carry no DB password (DATABASE_URL from env/.env supplies it).
+- HI-03/HI-04: weather lookup is scoped by hotspot location, provider, incident origin and valid_time <= now; weather unavailable means no plan (no fabricated observation).
 
 ## Next Action
 

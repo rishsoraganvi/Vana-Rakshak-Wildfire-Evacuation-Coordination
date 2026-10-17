@@ -44,7 +44,7 @@ Plans:
 - [x] 02-06-PLAN.md — (gap) Audit model_metadata, LLM gating, configurable model (PLAT-02, HI-05, MD-11)
 - [x] 02-07-PLAN.md — (gap) Every cluster simulated, routes start outside fire (CR-03, HI-01)
 - [x] 02-08-PLAN.md — (gap) Loopback-only Postgres/Redis, required password (HI-06)
-- [ ] 02-09-PLAN.md — (gap) Scoped weather lookup, no fabricated weather (HI-03, HI-04)
+- [x] 02-09-PLAN.md — (gap) Scoped weather lookup, no fabricated weather (HI-03, HI-04)
 
 ## Phase 3: Capacity-Aware Coordinated Planning
 
