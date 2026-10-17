@@ -11,7 +11,7 @@ firms_sources:
 llm_enabled: false
 llm_provider: groq
 llm_model: openai/gpt-oss-20b
-database_url: postgresql+psycopg://wildfire:change_me@postgres:5432/wildfire
+database_url: postgresql+psycopg://wildfire@postgres:5432/wildfire
 redis_url: redis://redis:6379/0
 groq_api_key: ""
 osm_cache_path: data/osm/bandipur_road_graph.graphml

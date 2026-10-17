@@ -4,7 +4,6 @@ from pathlib import Path
 
 import pytest
 from sqlalchemy.engine import make_url
-
 from wildfire_core.config import BBox, load_settings
 
 

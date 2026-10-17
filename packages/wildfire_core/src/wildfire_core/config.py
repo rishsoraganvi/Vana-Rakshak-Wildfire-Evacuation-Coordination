@@ -49,7 +49,7 @@ class Settings(BaseModel):
     llm_model: str
     database_url: SecretStr
     redis_url: SecretStr
-    postgres_password: SecretStr = SecretStr("change_me")
+    postgres_password: SecretStr = SecretStr("")
 
     # Phase 2 additions
     groq_api_key: SecretStr = SecretStr("")
