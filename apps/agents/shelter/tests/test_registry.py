@@ -7,7 +7,13 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from agent_shelter.registry import fetch_shelters, to_candidate, usable_capacity
+from agent_shelter.registry import (
+    CapacityExceeded,
+    fetch_shelters,
+    to_candidate,
+    update_occupancy,
+    usable_capacity,
+)
 from wildfire_core.db.repositories import upsert_shelters
 from wildfire_core.seed import load_shelter_rows
 
@@ -112,3 +118,85 @@ def test_seed_row_flows_through_upsert_and_registry_candidate() -> None:
     assert candidate.usable_capacity == int(row.capacity * 0.6)
     assert candidate.available == candidate.usable_capacity - 10
     assert candidate.is_simulated
+
+
+# --- update_occupancy (atomic compare-and-set, D-03) -------------------------------------------
+
+
+class OccupancyResult:
+    def __init__(self, value: int | None) -> None:
+        self._value = value
+
+    def scalar_one_or_none(self) -> int | None:
+        return self._value
+
+
+class OccupancyConnection:
+    def __init__(self, log: list[tuple[str, Any]], returned: int | None) -> None:
+        self._log = log
+        self._returned = returned
+
+    def execute(self, statement: Any, parameters: Any = None) -> OccupancyResult:
+        self._log.append((str(statement), parameters))
+        return OccupancyResult(self._returned)
+
+
+class OccupancyEngine:
+    def __init__(self, returned: int | None) -> None:
+        self.log: list[tuple[str, Any]] = []
+        self._returned = returned
+
+    @contextmanager
+    def begin(self) -> Iterator[OccupancyConnection]:
+        yield OccupancyConnection(self.log, self._returned)
+
+
+def test_update_occupancy_is_single_statement_cas_with_history() -> None:
+    engine = OccupancyEngine(returned=45)
+    result = update_occupancy(
+        engine,  # type: ignore[arg-type]
+        shelter_id="22222222-2222-2222-2222-222222222222",
+        delta=5,
+        incident_id=None,
+        default_factor=0.6,
+    )
+    assert result == 45
+    assert len(engine.log) == 2
+    update_sql, update_params = engine.log[0]
+    assert update_sql.lstrip().startswith("UPDATE shelters")
+    assert "RETURNING occupancy" in update_sql
+    assert "BETWEEN 0 AND floor(capacity * COALESCE(usable_factor" in update_sql
+    assert isinstance(update_params["default_factor"], Decimal)
+    assert update_params["default_factor"] == Decimal("0.6")
+    history_sql, history_params = engine.log[1]
+    assert "INSERT INTO shelter_occupancy" in history_sql
+    assert history_params["occupancy"] == 45
+    assert history_params["delta"] == 5
+    assert history_params["source"] == "plan"
+
+
+def test_update_occupancy_refusal_raises_and_writes_no_history() -> None:
+    engine = OccupancyEngine(returned=None)
+    with pytest.raises(CapacityExceeded) as excinfo:
+        update_occupancy(
+            engine,  # type: ignore[arg-type]
+            shelter_id="22222222-2222-2222-2222-222222222222",
+            delta=1,
+            incident_id=None,
+            default_factor=0.6,
+        )
+    assert excinfo.value.delta == 1
+    assert excinfo.value.shelter_id == "22222222-2222-2222-2222-222222222222"
+    assert len(engine.log) == 1
+    assert all("INSERT INTO shelter_occupancy" not in sql for sql, _ in engine.log)
+
+
+def test_update_occupancy_rejects_zero_delta() -> None:
+    with pytest.raises(ValueError):
+        update_occupancy(
+            OccupancyEngine(returned=0),  # type: ignore[arg-type]
+            shelter_id="x",
+            delta=0,
+            incident_id=None,
+            default_factor=0.6,
+        )

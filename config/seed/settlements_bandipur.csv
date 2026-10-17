@@ -1,0 +1,11 @@
+external_ref,name,kind,population,pop_source,lat,lon,buffer_m,is_simulated
+SYN-ST-01,SYN Village 01,village,420,synthetic,11.72270,76.64184,2000,true
+SYN-ST-02,SYN Village 02,hamlet,310,synthetic,11.73619,76.62990,2000,true
+SYN-ST-03,SYN Village 03,village,880,synthetic,11.70561,76.65286,2000,true
+SYN-ST-04,SYN Village 04,hamlet,150,synthetic,11.74428,76.66296,2000,true
+SYN-ST-05,SYN Village 05,village,560,synthetic,11.69482,76.61979,2000,true
+SYN-ST-06,SYN Village 06,hamlet,95,synthetic,11.75777,76.63265,2000,true
+SYN-ST-07,SYN Village 07,village,240,synthetic,11.67863,76.65745,2000,true
+SYN-ST-08,SYN Village 08,village,730,synthetic,11.72809,76.69327,2000,true
+SYN-ST-09,SYN Village 09,hamlet,60,synthetic,11.77845,76.67306,2000,true
+SYN-ST-10,SYN Village 10,village,380,synthetic,11.66514,76.59224,2000,true
