@@ -1,45 +1,49 @@
-import networkx as nx
-from coordinator.graph import _aoi_boundary_exit_nodes
+from coordinator.graph import NODE_ORDER
+from coordinator.repository import InMemoryPlanningRepository
 from coordinator.runner import build_graph
-from shapely import wkt
+from pipeline_factory import make_deps, make_settings
+
+EXPECTED_ORDER = [
+    "ingest_trigger",
+    "cluster_hotspots",
+    "run_weather",
+    "run_fire_ca",
+    "assess_risk",
+    "dispatch_specialists",
+    "plan_evacuation",
+    "generate_rationale",
+    "assemble_plan",
+    "write_audit",
+]
 
 
-def test_graph_has_all_eight_nodes() -> None:
-    graph = build_graph().compile().get_graph()
+def _compiled_graph():
+    deps = make_deps(InMemoryPlanningRepository(), make_settings())
+    return build_graph(deps).compile().get_graph()
 
-    assert {
-        "ingest_trigger",
-        "run_weather",
-        "cluster_hotspots",
-        "run_fire_ca",
-        "compute_route",
-        "generate_rationale",
-        "assemble_plan",
-        "write_audit",
-    }.issubset(graph.nodes)
+
+def test_graph_has_exactly_the_ten_phase3_nodes() -> None:
+    graph = _compiled_graph()
+
+    assert list(NODE_ORDER) == EXPECTED_ORDER
+    assert {name for name in graph.nodes if not name.startswith("__")} == set(EXPECTED_ORDER)
 
 
 def test_graph_entry_point_is_ingest_trigger() -> None:
-    graph = build_graph().compile().get_graph()
+    graph = _compiled_graph()
 
     assert any(
-        edge.source == "__start__" and edge.target == "ingest_trigger"
-        for edge in graph.edges
+        edge.source == "__start__" and edge.target == "ingest_trigger" for edge in graph.edges
     )
 
 
-def test_route_destinations_are_safe_nodes_nearest_each_aoi_boundary() -> None:
-    graph = nx.MultiDiGraph()
-    graph.add_node(1, x=0.05, y=5.0)
-    graph.add_node(2, x=9.95, y=5.0)
-    graph.add_node(3, x=5.0, y=0.05)
-    graph.add_node(4, x=5.0, y=9.95)
-    graph.add_node(5, x=5.0, y=5.0)
-    graph.add_node(6, x=0.5, y=5.0)
-    current_perimeter = wkt.loads("POLYGON ((0 4, 0.2 4, 0.2 6, 0 6, 0 4))")
+def test_edges_run_weather_before_fire_then_risk_then_specialists() -> None:
+    graph = _compiled_graph()
+    edges = {(edge.source, edge.target) for edge in graph.edges}
 
-    exits = _aoi_boundary_exit_nodes(graph, (0.0, 0.0, 10.0, 10.0), current_perimeter)
-
-    assert exits == [6, 2, 3, 4]
-    assert 1 not in exits
-    assert 5 not in exits
+    for current, following in zip(EXPECTED_ORDER, EXPECTED_ORDER[1:], strict=False):
+        assert (current, following) in edges
+    assert ("write_audit", "__end__") in edges
+    position = {name: index for index, name in enumerate(EXPECTED_ORDER)}
+    assert position["cluster_hotspots"] < position["run_weather"] < position["run_fire_ca"]
+    assert position["run_fire_ca"] < position["assess_risk"] < position["dispatch_specialists"]
