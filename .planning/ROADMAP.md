@@ -32,7 +32,7 @@ Plans:
 
 **Exit criteria:** end-to-end replay passes with mocked LLM; output contains P50/P90 forecast data and route; audit entries cover every node/tool call; fallback works with LLM disabled; core tests pass.
 
-**Plans:** 9/9 plans executed (verification: human_needed — see 02-UAT.md)
+**Plans:** 9/9 plans complete
 
 Plans:
 

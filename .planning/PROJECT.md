@@ -14,7 +14,7 @@ A human reviewer can quickly understand and safely approve or correct a traceabl
 
 ### Validated
 
-(None yet - ship to validate.)
+- ✓ Basic auditable evacuation route from a hotspot or replay event for the pilot cluster (fire CA ensemble with P50/P90, fire-aware routing, LangGraph Coordinator, 8-node audit trail, deterministic LLM fallback) — Phase 2
 
 ### Active
 
@@ -51,11 +51,14 @@ A human reviewer can quickly understand and safely approve or correct a traceabl
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Use LangGraph for Coordinator orchestration | Explicit state machine, tool hand-offs, checkpointing, and review interrupts match the workflow | - Pending |
-| Keep numeric decisions deterministic | Safety, reproducibility, validation, and explainability require bounded computation | - Pending |
-| Use PostgreSQL/PostGIS plus Redis | Durable spatial audit/state with hot shared state and pub/sub | - Pending |
+| Use LangGraph for Coordinator orchestration | Explicit state machine, tool hand-offs, checkpointing, and review interrupts match the workflow | ✓ Good — 8-node Coordinator shipped in Phase 2 |
+| Keep numeric decisions deterministic | Safety, reproducibility, validation, and explainability require bounded computation | ✓ Good — LLM receives compact metrics only, writes rationale (Phase 2) |
+| Use PostgreSQL/PostGIS plus Redis | Durable spatial audit/state with hot shared state and pub/sub | ✓ Good — loopback-only, required password (Phase 2) |
 | Simulate drone and vehicle layers | Enables Phase 2 evaluation without claiming operational integrations | - Pending |
 | Treat this as decision support with mandatory human review | Prevents accidental authority or dissemination bypass | - Pending |
+| Wind direction is meteorological FROM; fire spreads downwind | Matches Open-Meteo convention (review CR-01) | ✓ Phase 2 |
+| Default LLM openai/gpt-oss-20b on Groq, LLM off by default | Earlier Llama models retired; 8k TPM limit needs compact payloads | ✓ Phase 2 |
+| Never fabricate weather; no plan without a matching observation | Fabricated "fresh" weather misled reviewers (review HI-03) | ✓ Phase 2 |
 
 ## Evolution
 
@@ -74,4 +77,4 @@ This document evolves at phase transitions and milestone boundaries.
 3. Update Context with evidence, feedback, and metrics.
 
 ---
-*Last updated: 2026-10-01 after initialization from generatedPlan*
+*Last updated: 2026-10-17 after Phase 2*

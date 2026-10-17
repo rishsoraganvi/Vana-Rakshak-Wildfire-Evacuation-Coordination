@@ -1,7 +1,7 @@
 ---
 phase: 02-mvp-detection-to-route
 verified: 2026-10-17T06:05:00Z
-status: human_needed
+status: passed
 score: 14/14 must-haves verified
 behavior_unverified: 0
 overrides_applied: 0
@@ -9,25 +9,31 @@ re_verification:
   previous_status: gaps_found
   previous_score: 7/8
   gaps_closed:
+
     - "PLAT-02: agent_runs.model_metadata never populated (closed by 02-06; live DB now holds non-null metadata on every generate_rationale row created after the fix)"
     - "Live Groq success path never observed (closed by 02-06 MD-11: live rows show llm_called=true, is_fallback=false, finish_reason=stop, response_model=openai/gpt-oss-20b)"
     - "CR-01 wind convention (02-04), CR-02/HI-01 routing exposure and ranking (02-05), CR-03 per-cluster fire (02-07), HI-03/HI-04 weather (02-09), HI-05 LLM gating (02-06), HI-06 loopback + required password (02-08), MD-11 configured model (02-06)"
   gaps_remaining: []
   regressions: []
 deferred:
+
   - truth: "PLAN-01 clause: 'dispatches eligible specialists in parallel through typed tool contracts'"
     addressed_in: "Phase 3"
     evidence: "Phase 3 deliverables in ROADMAP.md include 'parallel specialist dispatch'. Phase 2 graph is linear by design (Weather -> Fire only)."
+
   - truth: "JWT viewer-role protection on the read-only API"
     addressed_in: "Phase 4"
     evidence: "PLAT-01 is mapped to Phase 4; Phase 2 API is loopback-only (and now Postgres/Redis too, per HI-06)."
+
   - truth: "Review items MD-01..MD-10 and LO-01..LO-10 not in the gap-closure scope (P90 horizons / tiered penalties in routing, first-non-blocked route choice, per-horizon RNG re-seed, per-node audit status and try/finally audit flush, plan-version race, debounced-trigger incident, LLM grounding checks)"
     addressed_in: "Phase 3 (PLAN-03, PLAN-07, PLAN-08) and later; tracked in 02-REVIEW.md"
     evidence: "Phase 3 covers fire-forecast route penalties, deterministic planner/bounded retries and grounded rationale. These were deliberately excluded from the 02-04..02-09 gap-closure scope (CR-01..03, HI-01..06, MD-11 only)."
 human_verification:
+
   - test: "Suitability of AOI-boundary exit policy and route output for Bandipur"
     expected: "A domain operator judges the selected boundary exit nodes and the resulting route as operationally sensible"
     why_human: "Domain judgment. The replay uses a synthetic 3-node, 4-edge fixture graph (tests/fixtures/osm/bandipur_stub.graphml); after the CR-02 fix its replay route is correctly classified 'blocked' (every route crosses the simulated fire), so the demo never shows a 'safe' route. Carried over from 02-VALIDATION.md manual-only list."
+
   - test: "Live, repeatable confirmation of Groq success path on the operator's own key"
     expected: "scripts/replay_demo.py prints 'LLM Fallback : No' with LLM Model groq/openai/gpt-oss-20b"
     why_human: "Already evidenced in the live DB (see Truth 12) and by the executor/orchestrator live runs, but it depends on an external provider, a served model id and a secret key; a final operator confirmation is cheap and not reproducible offline. Non-blocking."
