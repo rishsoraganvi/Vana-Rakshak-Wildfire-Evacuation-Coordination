@@ -188,6 +188,16 @@ def test_ids_or_names_in_violation_keys_are_rejected_before_any_call(monkeypatch
     assert requests == []
 
 
+def test_validator_codes_with_digits_are_valid_keys(monkeypatch) -> None:
+    # V3 codes such as p50_before_arrival carry a digit; the planner sends them as keys.
+    requests = _install(monkeypatch, ['{"strategy": "rematch"}'])
+
+    result = _choose(counts={"V3:p50_before_arrival": 2, "V3:p90_before_arrival": 1})
+
+    assert result.strategy == "rematch"
+    assert len(requests) == 1
+
+
 def test_strategy_outside_global_menu_is_rejected_as_input(monkeypatch) -> None:
     _install(monkeypatch, [])
 

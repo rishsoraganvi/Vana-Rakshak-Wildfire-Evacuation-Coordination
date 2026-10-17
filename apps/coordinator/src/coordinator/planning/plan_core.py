@@ -604,6 +604,10 @@ def plan_draft(
     chooser: StrategyChooser | None = None,
 ) -> PlanOutcome:
     """Preflight, assign, validate, then resolve, fall back or fail closed (D-11, D-12, D-21)."""
+    # Imported here because the resolver and the fallback planner build on this module.
+    from coordinator.planning.fallback_planner import greedy_fallback
+    from coordinator.planning.resolver import deterministic_chooser, resolve
+
     failures = [*inputs.preflight_failures, *_origin_failures(inputs, ctx)]
     if failures:
         return PlanOutcome(_failed_draft(inputs, ctx, failures))
@@ -623,9 +627,51 @@ def plan_draft(
             _valid_draft(inputs, ctx, first, first_validation, used_fallback=False, steps=())
         )
 
-    reasons = violation_lines(first_validation, inputs.groups)
+    resolved = resolve(
+        inputs,
+        ctx,
+        params,
+        first,
+        first_validation,
+        chooser or deterministic_chooser(params.fix_menu_order),
+    )
+    llm_calls = resolved.llm_calls
+    steps = resolved.steps
+    if resolved.resolved:
+        return PlanOutcome(
+            _valid_draft(
+                inputs, ctx, resolved.result, resolved.validation, used_fallback=False, steps=steps
+            ),
+            llm_calls,
+        )
+
+    fallback = greedy_fallback(inputs, ctx, params)
+    fallback_validation = validate_assignment(inputs, ctx, fallback)
+    if not has_blocking_failure(fallback_validation):
+        return PlanOutcome(
+            _valid_draft(
+                inputs, ctx, fallback, fallback_validation, used_fallback=True, steps=steps
+            ),
+            llm_calls,
+        )
+
+    reasons = violation_lines(resolved.validation, inputs.groups)
+    fallback_only = [
+        f"fallback planner: {line}"
+        for line in violation_lines(fallback_validation, inputs.groups)
+        if line not in reasons
+    ]
+    reasons.extend(fallback_only)
     return PlanOutcome(
-        _failed_draft(inputs, ctx, reasons, validation=first_validation, result=first, steps=())
+        _failed_draft(
+            inputs,
+            ctx,
+            reasons or ["planning failed after the resolver and the fallback planner"],
+            validation=resolved.validation,
+            result=resolved.result,
+            steps=steps,
+        ),
+        llm_calls,
     )
 
 

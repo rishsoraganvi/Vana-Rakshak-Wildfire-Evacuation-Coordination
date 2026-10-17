@@ -306,7 +306,7 @@ def generate_plan_rationale(plan_summary: Mapping[str, Any], settings: Settings)
 
 
 FIX_STRATEGY_MENU = ("next_path", "rematch", "split")
-_VIOLATION_KEY = re.compile(r"^V[1-8]:[a-z_]+$")
+_VIOLATION_KEY = re.compile(r"^V[1-8]:[a-z][a-z0-9_]*$")
 
 
 class FixStrategyReply(BaseModel):

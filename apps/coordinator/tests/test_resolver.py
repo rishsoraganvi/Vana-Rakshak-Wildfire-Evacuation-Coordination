@@ -172,7 +172,7 @@ def test_the_llm_payload_carries_only_menu_names_and_violation_codes(monkeypatch
         assert tuple(call["allowed"]) == ORDER
         assert set(call) == {"loop", "allowed", "violation_counts", "settings"}
         for key in call["violation_counts"]:
-            assert re.fullmatch(r"V[1-8]:[a-z_]+", key)
+            assert re.fullmatch(r"V[1-8]:[a-z][a-z0-9_]*", key)
             assert "A" not in key.split(":")[1] and "s36" not in key
 
 

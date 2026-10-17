@@ -97,5 +97,8 @@ def test_when_both_planners_fail_the_failed_draft_carries_no_approvable_content(
     assert draft.used_fallback is False
     assert draft.routes == () and draft.shelter_assignments == ()
     assert len(draft.resolver_steps) <= 3
-    assert any("p50_before_arrival" in reason for reason in draft.failure_reasons)
-    assert any(reason.startswith("fallback planner: V5") for reason in draft.failure_reasons)
+    assert any("group A" in reason for reason in draft.failure_reasons)
+    assert any(
+        reason.startswith("fallback planner: V5") and "no_safe_route" in reason
+        for reason in draft.failure_reasons
+    )
