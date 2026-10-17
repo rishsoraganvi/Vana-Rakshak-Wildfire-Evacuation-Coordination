@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 current_phase: 03
 status: executing
-stopped_at: Completed 03-06-PLAN.md
-last_updated: "2026-10-17T13:59:14.353Z"
-state_head: 045e79cb10c9c527eeec8ad5e94e44c52c9a3fb8
+stopped_at: Completed 03-08-PLAN.md
+last_updated: "2026-10-17T14:31:26.636Z"
+state_head: 66e2e8d52be91de8520efbea0c3424df2c7918fb
 progress:
   total_phases: 6
   completed_phases: 2
   total_plans: 24
-  completed_plans: 19
+  completed_plans: 20
   percent: 50
 current_phase_name: Capacity-Aware Coordinated Planning
 ---
@@ -28,10 +28,10 @@ See: `.planning/PROJECT.md` (updated 2026-10-01)
 Current Phase: 03
 
 - Phase: 3 of 6 (executing)
-- Current Plan: 8 of 12 (03-01..03-07 done; next is 03-08)
-- Status: Plan 03-06 complete; Phase 2 verification human_needed (2 non-blocking UAT items)
-- Progress: 58% of Phase 3 (7/12 plans)
-- Last activity: Plan 03-06 executed - Fire assess_risk (groups with interpolated ETA/priority, needs_rescue_response, p90_only_exposure, unknown_population) and pure validators V1-V7 with ValidationContext, run_structural_validators, has_blocking_failure, violation_summary; Hypothesis iff-properties for V4/V5/V6 (V1-V7 NOT yet wired into a pipeline; plan 03-10 must pass clusters_referenced). Previously: Plan 03-07 executed - plan assembly: finalize_plan (S5 gate, failed vs pending_review, as_failed), strict V8 grounding with template replacement, build_freshness/build_provenance, generate_plan_rationale and enum-only choose_fix_strategy with strict json_schema (all Groq calls mocked in tests). Previously: Plan 03-05 executed - routing upgraded: per-horizon fire costs on a single STRtree pass, edge-status blocking, settlement-to-shelter cost matrix on the nearest-horizon rule, per-edge exposure evaluation, lazy k=3 Yen on a collapsed DiGraph, BPR congestion with MSA, load-only graph loader (GraphNotBuiltError) and scripts/build_osm_graph.py (written and unit-tested, NOT run). Previously: Plan 03-04 executed - migration 0006 applied (head 0006: shelters, shelter_occupancy, failed status, plan_versions provenance + immutability trigger, road_edge_status), labelled synthetic seed (20 shelters, 10 settlements) loaded, shelter registry with exact usable capacity, perimeter exclusion and atomic update_occupancy. Previously: Plan 03-03 executed - WR-03 fixed (parse_open_meteo splits observations from forecasts with a required origin; hotspot-trigger incidents carry the real origin). Previously: Plan 03-02 executed - Phase 3 contracts (IntegratedPlan S5/D-11 invariants, ToolResult), shared nearest-horizon rule, footprint unions, validated Phase 3 config block
+- Current Plan: 9 of 12 (03-01..03-08 done; next is 03-09)
+- Status: Plan 03-08 complete; Phase 2 verification human_needed (2 non-blocking UAT items)
+- Progress: 67% of Phase 3 (8/12 plans)
+- Last activity: Plan 03-08 executed - versioned immutable plan persistence: PlanningRepository (SQL + in-memory twin), persist_plan under pg_advisory_xact_lock with state_version check and FOR SHARE capacity re-check, shared_state_snapshots, material-change signature/plan_diff (D-16), SharedState TechSpec 5 sections, ADR-002; immutability trigger proven live (graph.py still uses the old assemble_plan SQL until 03-10). Previously: Plan 03-06 executed - Fire assess_risk (groups with interpolated ETA/priority, needs_rescue_response, p90_only_exposure, unknown_population) and pure validators V1-V7 with ValidationContext, run_structural_validators, has_blocking_failure, violation_summary; Hypothesis iff-properties for V4/V5/V6 (V1-V7 NOT yet wired into a pipeline; plan 03-10 must pass clusters_referenced). Previously: Plan 03-07 executed - plan assembly: finalize_plan (S5 gate, failed vs pending_review, as_failed), strict V8 grounding with template replacement, build_freshness/build_provenance, generate_plan_rationale and enum-only choose_fix_strategy with strict json_schema (all Groq calls mocked in tests). Previously: Plan 03-05 executed - routing upgraded: per-horizon fire costs on a single STRtree pass, edge-status blocking, settlement-to-shelter cost matrix on the nearest-horizon rule, per-edge exposure evaluation, lazy k=3 Yen on a collapsed DiGraph, BPR congestion with MSA, load-only graph loader (GraphNotBuiltError) and scripts/build_osm_graph.py (written and unit-tested, NOT run). Previously: Plan 03-04 executed - migration 0006 applied (head 0006: shelters, shelter_occupancy, failed status, plan_versions provenance + immutability trigger, road_edge_status), labelled synthetic seed (20 shelters, 10 settlements) loaded, shelter registry with exact usable capacity, perimeter exclusion and atomic update_occupancy. Previously: Plan 03-03 executed - WR-03 fixed (parse_open_meteo splits observations from forecasts with a required origin; hotspot-trigger incidents carry the real origin). Previously: Plan 03-02 executed - Phase 3 contracts (IntegratedPlan S5/D-11 invariants, ToolResult), shared nearest-horizon rule, footprint unions, validated Phase 3 config block
 
 ## Decisions and Constraints
 
@@ -70,8 +70,8 @@ Complete the 2 Phase 2 UAT items with `/gsd-verify-work 2` (02-UAT.md). Operator
 
 ## Session
 
-**Last session:** 2026-10-17T13:59:13.301Z
-**Stopped at:** Completed 03-07-PLAN.md
+**Last session:** 2026-10-17T14:31:25.415Z
+**Stopped at:** Completed 03-08-PLAN.md
 **Resume file:** None
 
 ## Performance Metrics
@@ -89,9 +89,11 @@ Complete the 2 Phase 2 UAT items with `/gsd-verify-work 2` (02-UAT.md). Operator
 | Phase 03 P03 | 25min | 2 tasks | 7 files |
 | Phase 03 P05 | 50min | 3 tasks | 12 files |
 | Phase 03 P07 | 40min | 3 tasks | 14 files |
+| Phase 03 P08 | 55min | 3 tasks | 7 files |
 
 ## Decisions
 
+- [Phase 3]: 03-08: persist_plan is the only plan_versions writer (lock, state check, capacity re-check, MAX+1, insert, status-only supersede, state bump, snapshot in one transaction); capacity_violations is one pure function shared by SQL and in-memory repositories; rejected/approved plans are never superseded; diff identity is the (group, shelter) pair; mark_trigger_handled must follow flush_audit (FK to agent_runs)
 - [Phase 2]: 02-04: CA wind_from_deg is meteorological FROM; spread_direction_deg is None when P50 shift < 1 cell; metrics use front advance over real horizon
 - [Phase 2]: 02-05: fire exposure tested on full edge geometry (intersects); compute_route searches unblocked first then least-blocked (1e6 x travel_time); inf still means blocked (D-06)
 - [Phase 2]: 02-06: generate_rationale audit rows carry model_metadata (JSON text at flush); Groq called only when llm_enabled + provider groq + model + key; default model openai/gpt-oss-20b (config); blank env vars treated as unset; Groq prompt carries compact metrics (no WKT) to stay under on-demand TPM

@@ -56,7 +56,7 @@ Plans:
 
 **Exit criteria:** property tests prove capacity and double-booking invariants; invalid plans are blocked; a material route/shelter change creates a new version; provenance and freshness are present on every plan.
 
-**Plans:** 7/12 plans executed
+**Plans:** 8/12 plans executed
 
 Plans:
 
@@ -67,7 +67,7 @@ Plans:
 - [x] 03-05-PLAN.md — Routing: ETA-aware horizon costs, edge status, cost matrix, k=3 paths, BPR congestion, load-only graph + build script
 - [x] 03-06-PLAN.md — Risk assessment (groups, rescue alerts, P90 warnings) and validators V1-V7 with properties
 - [x] 03-07-PLAN.md — Finalize (S5 gate), strict V8 grounding + template, enum-only LLM fix menu, plan rationale
-- [ ] 03-08-PLAN.md — Versioned persistence: repository, advisory-locked versions, diff, state_version, ADR-002
+- [x] 03-08-PLAN.md — Versioned persistence: repository, advisory-locked versions, diff, state_version, ADR-002
 - [ ] 03-09-PLAN.md — Planning core: capacity-aware assignment with BPR passes, bounded resolver, fallback planner, invariants
 - [ ] 03-10-PLAN.md — Coordinator rewiring: parallel dispatch, per-cluster weather (WR-01), persistence, audit on failure
 - [ ] 03-11-PLAN.md — Re-plan triggers, debounce, on-demand entry, API failed-plan visibility, demo/live test updates
