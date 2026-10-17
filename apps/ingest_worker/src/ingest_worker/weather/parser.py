@@ -7,13 +7,23 @@ from wildfire_core.clock import Clock
 from wildfire_core.schemas.metadata import Freshness
 from wildfire_core.schemas.monitoring import WeatherObservation
 
+DATA_ORIGINS = frozenset({"live", "replay", "simulated", "manual"})
+
 
 def parse_open_meteo(
     payload: dict[str, Any],
     clock: Clock,
     *,
-    origin: str = "replay",
+    origin: str,
 ) -> list[WeatherObservation]:
+    """Normalise an Open-Meteo hourly payload.
+
+    Hours at or before ``issued_at`` are observations (``is_forecast`` False); later
+    hours are forecasts. ``origin`` is mandatory so no caller silently labels live
+    data as replay (WR-03).
+    """
+    if origin not in DATA_ORIGINS:
+        raise ValueError(f"origin must be one of {sorted(DATA_ORIGINS)}, got {origin!r}")
     hourly = payload["hourly"]
     times = hourly["time"]
     issued_at = datetime.fromisoformat(payload.get("issued_at", clock.now_utc().isoformat()))
@@ -44,7 +54,7 @@ def parse_open_meteo(
                 lon=float(payload["longitude"]),
                 valid_time=valid_time,
                 issued_at=issued_at,
-                is_forecast=True,
+                is_forecast=valid_time > issued_at,
                 temperature_c=_value(hourly, "temperature_2m", index),
                 rh_pct=_value(hourly, "relative_humidity_2m", index),
                 wind_speed_ms=_value(hourly, "wind_speed_10m", index),

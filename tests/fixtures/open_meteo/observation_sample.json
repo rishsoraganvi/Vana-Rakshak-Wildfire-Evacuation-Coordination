@@ -1,0 +1,1 @@
+{"latitude": 11.72, "longitude": 76.64, "issued_at": "2026-01-01T09:00:00Z", "hourly": {"time": ["2026-01-01T07:00:00Z", "2026-01-01T08:00:00Z"], "temperature_2m": [30.4, 31.0], "relative_humidity_2m": [45, 43], "wind_speed_10m": [3.1, 3.8], "wind_direction_10m": [215, 218], "wind_gusts_10m": [6.5, 7.4], "precipitation": [0, 0]}}
