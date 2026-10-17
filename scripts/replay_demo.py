@@ -6,6 +6,7 @@ import sys
 import time
 import tomllib
 import traceback
+from collections import Counter
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
@@ -136,7 +137,7 @@ def _print_summary(
     plan_data = plan["plan_data"]
     if isinstance(plan_data, str):
         plan_data = json.loads(plan_data)
-    fire_result = plan_data["fire_result"]
+    fire_results = plan_data["fire_results"]
     rationale = plan_data.get("rationale_md", "")
     routes = plan_data.get("routes", [])
     warnings = plan_data.get("warnings", [])
@@ -148,11 +149,17 @@ def _print_summary(
     print(f"  Run ID        : {run_id}")
     print(f"  Plan ID       : {plan['id']}")
     print(f"  Status        : {plan['status']}")
+    total_area = sum(float(item["affected_area_km2"]) for item in fire_results)
+    confidences = ", ".join(str(item["confidence"]) for item in fire_results)
     print(
-        f"  Fire CA       : {fire_result['confidence']} confidence | "
-        f"{fire_result['affected_area_km2']} km2 affected"
+        f"  Fire CA       : {len(fire_results)} cluster(s) | "
+        f"{total_area:.2f} km2 affected | confidence {confidences}"
     )
-    print(f"  Routes        : {len(routes)} computed")
+    classification_counts = Counter(route["safety_classification"] for route in routes)
+    counts_text = ", ".join(
+        f"{name}: {count}" for name, count in sorted(classification_counts.items())
+    )
+    print(f"  Routes        : {len(routes)} computed ({counts_text or 'none'})")
     print(f"  LLM Model     : {llm_metadata.get('provider')}/{llm_metadata.get('model')}")
     if plan_data.get("is_llm_fallback"):
         print(f"  LLM Fallback  : Yes ({llm_metadata.get('fallback_reason')})")

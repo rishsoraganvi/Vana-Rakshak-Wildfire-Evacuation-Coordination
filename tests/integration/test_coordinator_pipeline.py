@@ -138,7 +138,8 @@ def test_full_pipeline_produces_draft_plan(
 
     assert state["error"] is None
     assert len(state["audit_entries"]) == 8
-    assert state["fire_result"] is not None
+    assert len(state["clusters"]) >= 1
+    assert len(state["fire_results"]) == len(state["clusters"])
     assert state["rationale"]
     rationale_entry = next(
         entry for entry in state["audit_entries"] if entry["node_name"] == "generate_rationale"
@@ -179,6 +180,7 @@ def test_full_pipeline_produces_draft_plan(
     plan_data = plan["plan_data"]
     if isinstance(plan_data, str):
         plan_data = json.loads(plan_data)
+    assert len(plan_data["fire_results"]) == len(plan_data["clusters"])
     assert plan["status"] == "draft"
     assert str(plan["id"]) == plan_data["plan_id"]
     assert audit_count == 8

@@ -500,3 +500,66 @@ def test_blocked_candidates_choose_least_fire_exposure(monkeypatch) -> None:
     assert tuple(route["osm_node_path"]) == (2, 4)
     assert route["safety_classification"] == "blocked"
     assert any("No safe route found for fire cluster" in w for w in final_state["warnings"])
+
+
+def test_offline_pipeline_with_real_ca_and_routing_on_fixture_graph(monkeypatch) -> None:
+    """Real CA ensemble and real routing on the bundled fixture graph (PLAT-06)."""
+    fixture = Path(__file__).resolve().parents[3] / "tests/fixtures/osm/bandipur_stub.graphml"
+    jitter = [(-0.002, -0.001), (-0.001, 0.001), (0.0, 0.0), (0.001, -0.002), (0.002, 0.001)]
+    rows = []
+    ids = []
+    for index, (lat_delta, lon_delta) in enumerate(jitter):
+        hotspot_id = uuid4()
+        ids.append(hotspot_id)
+        rows.append(
+            {
+                "id": hotspot_id,
+                "lat": 11.72 + lat_delta,
+                "lon": 76.64 + lon_delta,
+                "frp": 20.0 + index,
+            }
+        )
+    engine = FakeEngine(rows, ids)
+    settings = _pipeline_settings(osm_cache_path=fixture, fire_grid_resolution_m=500)
+
+    monkeypatch.setattr(coordinator_graph, "_settings", lambda: settings)
+    monkeypatch.setattr(coordinator_graph, "_engine_for", lambda _url: engine)
+    monkeypatch.setattr(
+        coordinator_graph, "get_weather_snapshot", lambda *_args: _pipeline_weather()
+    )
+    monkeypatch.setattr(
+        coordinator_graph,
+        "generate_rationale",
+        lambda *_args: RationaleResult(
+            text="Grounded rationale",
+            is_fallback=False,
+            model_metadata={**base_model_metadata(settings), "llm_called": True},
+        ),
+    )
+
+    final_state = build_graph().compile().invoke(_empty_state())
+
+    assert final_state["error"] is None
+    assert len(final_state["fire_results"]) == 1
+    fire = final_state["fire_results"][0]
+    for field in (
+        "p50_1h_wkt",
+        "p50_3h_wkt",
+        "p50_6h_wkt",
+        "p90_1h_wkt",
+        "p90_3h_wkt",
+        "p90_6h_wkt",
+    ):
+        assert fire[field], field
+        assert not wkt.loads(fire[field]).is_empty, field
+    assert wkt.loads(fire["current_perimeter_wkt"]).covers(Point(76.64, 11.72))
+    direction = fire["spread_direction_deg"]
+    assert direction is None or 180.0 <= direction <= 270.0
+
+    assert len(final_state["routes"]) == 1
+    route = final_state["routes"][0]
+    assert route["osm_node_path"][0] == 1000001
+    assert route["safety_classification"] == "blocked"
+
+    assert engine.plan_parameters is not None
+    assert len(final_state["audit_entries"]) == 8
