@@ -4,7 +4,6 @@ import json
 import math
 import time
 from collections.abc import Iterable
-from datetime import UTC, datetime
 from functools import lru_cache
 from typing import Any
 from uuid import UUID
@@ -196,33 +195,49 @@ def ingest_trigger(state: CoordinatorState) -> CoordinatorState:
 def run_weather(state: CoordinatorState) -> CoordinatorState:
     started_ms = time.monotonic_ns() // 1_000_000
     settings = _settings()
-    latitude = (settings.aoi_bbox.south + settings.aoi_bbox.north) / 2
-    longitude = (settings.aoi_bbox.west + settings.aoi_bbox.east) / 2
+    if state["hotspots"]:
+        latitude = sum(item["lat"] for item in state["hotspots"]) / len(state["hotspots"])
+        longitude = sum(item["lon"] for item in state["hotspots"]) / len(state["hotspots"])
+    else:
+        latitude = (settings.aoi_bbox.south + settings.aoi_bbox.north) / 2
+        longitude = (settings.aoi_bbox.west + settings.aoi_bbox.east) / 2
 
+    origin: str | None = None
+    outputs: dict[str, Any]
     try:
+        engine = _engine_for(settings.database_url.get_secret_value())
+        with engine.connect() as connection:
+            origin = connection.execute(
+                text("SELECT origin::text FROM incidents WHERE id = :incident_id"),
+                {"incident_id": UUID(state["incident_id"])},
+            ).scalar_one()
         weather = get_weather_snapshot(
             latitude,
             longitude,
-            _engine_for(settings.database_url.get_secret_value()),
+            engine,
+            origin=origin,
+            provider=settings.weather_provider,
         )
+        outputs = weather.model_dump(mode="json")
+        state["weather_snapshot"] = outputs
     except Exception as error:
-        weather = WeatherSnapshot(
-            valid_time=datetime.now(UTC),
-            wind_speed_ms=0.0,
-            wind_dir_deg=0.0,
-            rh_pct=0.0,
-            temperature_c=0.0,
-            is_stale=True,
+        state["weather_snapshot"] = None
+        state["warnings"].append(
+            f"Weather snapshot unavailable ({type(error).__name__}); "
+            "fire spread and planning skipped. No weather observation was fabricated."
         )
-        state["warnings"].append(f"Weather snapshot unavailable: {type(error).__name__}")
+        outputs = {"weather_snapshot": None, "error": type(error).__name__}
 
-    weather_data = weather.model_dump(mode="json")
-    state["weather_snapshot"] = weather_data
     _audit(
         state,
         "run_weather",
-        {"latitude": latitude, "longitude": longitude},
-        weather_data,
+        {
+            "latitude": latitude,
+            "longitude": longitude,
+            "origin": origin,
+            "provider": settings.weather_provider,
+        },
+        outputs,
         started_ms,
     )
     return state
@@ -487,7 +502,7 @@ def assemble_plan(state: CoordinatorState) -> CoordinatorState:
             ),
             {
                 "incident_id": UUID(state["incident_id"]),
-                    "plan_id": UUID(plan.plan_id),
+                "plan_id": UUID(plan.plan_id),
                 "version": version,
                 "rationale": plan.rationale_md,
                 "is_fallback": plan.is_llm_fallback,

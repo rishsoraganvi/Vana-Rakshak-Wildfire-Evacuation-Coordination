@@ -131,7 +131,9 @@ def test_coordinator_runs_all_nodes_with_incident_scoped_data(monkeypatch) -> No
 
     monkeypatch.setattr(coordinator_graph, "_settings", lambda: settings)
     monkeypatch.setattr(coordinator_graph, "_engine_for", lambda _url: engine)
-    monkeypatch.setattr(coordinator_graph, "get_weather_snapshot", lambda *_args, **_kwargs: weather)
+    monkeypatch.setattr(
+        coordinator_graph, "get_weather_snapshot", lambda *_args, **_kwargs: weather
+    )
     monkeypatch.setattr(coordinator_graph, "compute_fire_spread", _fire_result)
     monkeypatch.setattr(coordinator_graph, "load_or_download_graph", lambda *_args: graph)
     monkeypatch.setattr(
@@ -441,6 +443,7 @@ def test_every_cluster_is_simulated_and_routing_penalises_union_of_fires(monkeyp
 
     assert len(rationale_inputs) == 1
     assert len(rationale_inputs[0]) == 2
+
 
 def _fixed_fire_fn(current_wkt: str, p50_wkt: str):
     def fire(cluster, _weather, **_kwargs) -> FireSpreadResult:
