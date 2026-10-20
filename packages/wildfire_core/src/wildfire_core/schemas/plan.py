@@ -109,6 +109,9 @@ class PlanAlert(_Frozen):
     ]
     message: str
     settlement_id: str | None = None
+    # Named when ``message`` mentions a settlement that has no evacuee group (rescue / P90-only),
+    # so V8 grounding treats that name as a plan fact (grounding.NAME_KEYS).
+    settlement_name: str | None = None
     cluster_id: str | None = None
 
 

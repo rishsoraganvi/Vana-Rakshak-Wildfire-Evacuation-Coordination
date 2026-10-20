@@ -107,6 +107,7 @@ def assess_risk(
                         "needs rescue response (exempt from evacuation matching)"
                     ),
                     settlement_id=settlement.settlement_id,
+                    settlement_name=settlement.name,
                 )
             )
             continue
@@ -130,6 +131,7 @@ def assess_risk(
                                 f"(first at {p90_horizon}h): monitor, no evacuation group"
                             ),
                             settlement_id=settlement.settlement_id,
+                            settlement_name=settlement.name,
                         )
                     )
                 continue

@@ -16,7 +16,7 @@ from pipeline_factory import (
     node_names,
     seeded_repository,
 )
-from wildfire_core.schemas.plan import IntegratedPlan
+from wildfire_core.schemas.plan import IntegratedPlan, SettlementRecord
 
 
 def _run(repo, settings, trigger_id, **kwargs):
@@ -50,6 +50,41 @@ def test_incident_flows_through_ten_nodes_to_a_pending_review_plan() -> None:
     assert state["persist"]["version"] == 1
     assert repo.incidents[INCIDENT_ID].state_version == 1
     assert state["run_id"] not in deps.scratch  # run-scoped scratch is released
+
+
+def test_settlement_inside_the_perimeter_is_alerted_and_the_plan_still_reaches_review() -> None:
+    # CR-01 / D-20: a rescue alert names a settlement that has no group; V8 must not fail the
+    # whole plan because of it.
+    settings = make_settings()
+    repo, trigger_id = seeded_repository(settings)
+    repo.add_settlement(
+        SettlementRecord(
+            settlement_id="set-burning",
+            external_ref="S-BURN",
+            name="Burnville",
+            lat=11.70,
+            lon=76.62,  # on the fire centre, inside the current perimeter
+            population=30,
+            pop_source="synthetic",
+            buffer_m=300,
+            is_simulated=True,
+        )
+    )
+
+    state, _, _ = _run(repo, settings, trigger_id)
+
+    assert state["error"] is None
+    stored = repo.latest_plan(INCIDENT_ID)
+    assert stored is not None and stored.status == "pending_review"
+    plan = IntegratedPlan.model_validate(stored.plan_data)
+    rescue = [alert for alert in plan.alerts if alert.kind == "needs_rescue_response"]
+    assert [alert.settlement_id for alert in rescue] == ["set-burning"]
+    assert rescue[0].settlement_name == "Burnville"
+    assert "set-burning" not in {group.group_id for group in plan.groups}
+    assert {group.group_id for group in plan.groups} >= {"set-near"}  # other groups still planned
+    assert len(plan.routes) == len(plan.shelter_assignments) >= 1
+    assert "Burnville" in plan.rationale_md
+    assert plan.validation[-1].validator_id == "V8" and plan.validation[-1].status == "pass"
 
 
 def test_audit_covers_ten_nodes_and_both_specialist_agents() -> None:

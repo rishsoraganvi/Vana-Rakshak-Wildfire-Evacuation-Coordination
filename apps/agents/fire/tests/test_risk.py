@@ -77,6 +77,7 @@ def test_point_inside_current_is_rescue_and_others_still_assessed() -> None:
     assert [item.settlement_id for item in result.rescue_alerts] == ["a_inside"]
     assert result.rescue_alerts[0].kind == "needs_rescue_response"
     assert "needs rescue response" in result.rescue_alerts[0].message
+    assert result.rescue_alerts[0].settlement_name == "Village a_inside"  # grounds V8 (CR-01)
     assert [item.group_id for item in result.groups] == ["b_other"]
 
 
@@ -141,6 +142,7 @@ def test_p90_only_exposure_warns_without_a_group() -> None:
     (alert,) = result.p90_only_alerts
     assert alert.kind == "p90_only_exposure"
     assert alert.settlement_id == "s1"
+    assert alert.settlement_name == "Village s1"  # grounds V8 (CR-01)
     assert "3h" in alert.message
 
 

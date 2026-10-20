@@ -156,6 +156,96 @@ def test_template_rationale_is_always_grounded(
     assert result.status == "pass", result.reasons
 
 
+def _finalize_with_alert(alert: PlanAlert):
+    return finalize_plan(
+        valid_draft(alerts=(alert,)),
+        rationale=None,
+        registry_names=[*REGISTRY, "Beta Village"],
+        freshness=freshness(),
+        provenance=provenance(),
+        created_at=NOW,
+        valid_until=valid_until(),
+        is_simulated=False,
+    )
+
+
+def test_rescue_alert_naming_a_group_less_settlement_does_not_fail_the_plan() -> None:
+    # CR-01 / D-20: a settlement inside the current perimeter has no group, only an alert.
+    alert = PlanAlert(
+        kind="needs_rescue_response",
+        message=(
+            "Beta Village is inside the active fire perimeter: needs rescue response "
+            "(exempt from evacuation matching)"
+        ),
+        settlement_id="b",
+        settlement_name="Beta Village",
+    )
+
+    plan = _finalize_with_alert(alert)
+
+    assert plan.status == "pending_review", plan.failure_reasons
+    assert "Beta Village" in plan.rationale_md
+    assert plan.validation[-1].validator_id == "V8" and plan.validation[-1].status == "pass"
+
+
+def test_p90_only_alert_naming_a_group_less_settlement_does_not_fail_the_plan() -> None:
+    # CR-01 / D-21: the P90-only warning names a settlement that has no evacuation group.
+    alert = PlanAlert(
+        kind="p90_only_exposure",
+        message=(
+            "Other Hall is reached only by the P90 forecast (first at 6h): "
+            "monitor, no evacuation group"
+        ),
+        settlement_id="st-x",
+        settlement_name="Other Hall",
+    )
+
+    plan = _finalize_with_alert(alert)
+
+    assert plan.status == "pending_review", plan.failure_reasons
+    assert "Other Hall" in plan.rationale_md
+
+
+def test_unnamed_alert_mentioning_a_registry_name_still_fails_closed() -> None:
+    # V8 stays strict: a name that is not a plan fact is rejected, so the settlement_name
+    # field (not a loosened gate) is what grounds alert text.
+    alert = PlanAlert(
+        kind="p90_only_exposure",
+        message="Beta Village is reached only by the P90 forecast (first at 6h)",
+        settlement_id="st-x",
+    )
+
+    plan = _finalize_with_alert(alert)
+
+    assert plan.status == "failed"
+    assert plan.failure_reasons == ("V8 deterministic rationale failed grounding",)
+
+
+def test_llm_text_naming_an_unplanned_settlement_is_still_rejected() -> None:
+    # The alert's settlement_name grounds that one name only; other registry names stay ungrounded.
+    alert = PlanAlert(
+        kind="needs_rescue_response",
+        message="Beta Village is inside the active fire perimeter: needs rescue response",
+        settlement_id="b",
+        settlement_name="Beta Village",
+    )
+    plan = finalize_plan(
+        valid_draft(alerts=(alert,)),
+        rationale=_llm("Beta Village needs rescue; also move Mudumalai to Bandipur."),
+        registry_names=[*REGISTRY, "Beta Village"],
+        freshness=freshness(),
+        provenance=provenance(),
+        created_at=NOW,
+        valid_until=valid_until(),
+        is_simulated=False,
+    )
+
+    assert plan.status == "pending_review"
+    assert plan.rationale_source == "template"
+    assert plan.validation[-1].status == "replaced"
+    assert "unknown name: bandipur" in plan.validation[-1].reasons[0]
+
+
 def test_failure_template_is_grounded() -> None:
     result = failing("V5", "group_unassigned", "residual 120 persons", group_id="g0")
     draft = failed_draft(
