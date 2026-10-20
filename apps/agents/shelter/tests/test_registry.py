@@ -165,7 +165,7 @@ def test_update_occupancy_is_single_statement_cas_with_history() -> None:
     update_sql, update_params = engine.log[0]
     assert update_sql.lstrip().startswith("UPDATE shelters")
     assert "RETURNING occupancy" in update_sql
-    assert "BETWEEN 0 AND floor(capacity * COALESCE(usable_factor" in update_sql
+    assert "<= floor(capacity * COALESCE(usable_factor" in update_sql
     assert isinstance(update_params["default_factor"], Decimal)
     assert update_params["default_factor"] == Decimal("0.6")
     history_sql, history_params = engine.log[1]
@@ -173,6 +173,23 @@ def test_update_occupancy_is_single_statement_cas_with_history() -> None:
     assert history_params["occupancy"] == 45
     assert history_params["delta"] == 5
     assert history_params["source"] == "plan"
+
+
+def test_update_occupancy_release_is_not_gated_on_active_or_usable_capacity() -> None:
+    # WR-03: only increases need an active shelter within usable capacity; a release must work
+    # for an inactive or over-allocated shelter and only be bounded below by zero.
+    engine = OccupancyEngine(returned=10)
+    update_occupancy(
+        engine,  # type: ignore[arg-type]
+        shelter_id="22222222-2222-2222-2222-222222222222",
+        delta=-5,
+        incident_id=None,
+        default_factor=0.6,
+    )
+    where = " ".join(engine.log[0][0].split()).split("WHERE", 1)[1]
+    assert "occupancy + CAST(:delta AS integer) >= 0" in where
+    assert "CAST(:delta AS integer) < 0 OR ( is_active AND" in where
+    assert "AND is_active" not in where.split("OR (", 1)[0]  # no unconditional is_active
 
 
 def test_update_occupancy_refusal_raises_and_writes_no_history() -> None:

@@ -142,9 +142,15 @@ _UPDATE_OCCUPANCY_SQL = """
     UPDATE shelters
     SET occupancy = occupancy + CAST(:delta AS integer), updated_at = now()
     WHERE id = CAST(:shelter_id AS uuid)
-      AND is_active
-      AND occupancy + CAST(:delta AS integer)
-          BETWEEN 0 AND floor(capacity * COALESCE(usable_factor, CAST(:default_factor AS numeric)))
+      AND occupancy + CAST(:delta AS integer) >= 0
+      AND (
+          CAST(:delta AS integer) < 0
+          OR (
+              is_active
+              AND occupancy + CAST(:delta AS integer)
+                  <= floor(capacity * COALESCE(usable_factor, CAST(:default_factor AS numeric)))
+          )
+      )
     RETURNING occupancy
 """
 
@@ -170,6 +176,10 @@ def update_occupancy(
     One UPDATE carries the capacity bound in its WHERE clause, so concurrent writers cannot
     double-book. Capacity is therefore re-checked inside the transaction (Rules 6). A history row
     is written in the same transaction only after the UPDATE succeeded.
+
+    The active and usable-capacity bounds apply to increases only. A release (negative delta) is
+    always allowed down to zero, so evacuees can leave a shelter that has gone inactive or whose
+    usable factor was lowered below its current occupancy.
     """
     if delta == 0:
         raise ValueError("delta must be non-zero")
