@@ -16,6 +16,8 @@ from wildfire_core.schemas.plan import ValidationResult
 
 NUM = re.compile(r"(?<![\w.])-?\d+(?:\.\d+)?")
 FACT_NUM = re.compile(r"\d+(?:\.\d+)?")
+# Validator ordinals ("V5") are labels, not facts: they must not ground a stray "5" (WR-04).
+_VALIDATOR_ORDINAL = re.compile(r"\bV[1-8]\b")
 _LIST_MARKER = re.compile(
     r"^[ 	]*(?:#{1,6}[ 	]+)?(?:(?:[-*+]|\d+[.)])[ 	]+)?", re.MULTILINE
 )
@@ -64,8 +66,10 @@ _COUNTED_KEYS = (
     "validation",
     "failure_reasons",
 )
-# Forecast horizons in hours and minutes, plus validator ordinals V1..V8.
-_FIXED_FACTS = frozenset({1.0, 3.0, 6.0, 60.0, 180.0, 360.0, 2.0, 4.0, 5.0, 7.0, 8.0})
+# Forecast horizons only, in hours and minutes. Validator ordinals ("V5") never reach the number
+# scan (``NUM`` skips digits glued to a word), and counts such as "4 shelters" must be grounded
+# by plan data or ``_derived_numbers``, not waved through as small integers (WR-04).
+_FIXED_FACTS = frozenset({1.0, 3.0, 6.0, 60.0, 180.0, 360.0})
 
 
 @dataclass(frozen=True)
@@ -90,7 +94,8 @@ def _walk(node: Any, key: str, numbers: set[float], ids: set[str], names: set[st
         ids.update(match.lower() for match in UUID.findall(node))
         if key in NAME_KEYS:
             names.add(node.strip().lower())
-        numbers.update(float(token) for token in FACT_NUM.findall(UUID.sub(" ", node)))
+        plain = _VALIDATOR_ORDINAL.sub(" ", UUID.sub(" ", node))
+        numbers.update(float(token) for token in FACT_NUM.findall(plain))
     elif isinstance(node, Mapping):
         for child_key, child in node.items():
             child_name = str(child_key)

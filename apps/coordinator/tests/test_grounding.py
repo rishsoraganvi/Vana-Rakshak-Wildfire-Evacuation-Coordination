@@ -121,6 +121,17 @@ def test_derived_counts_and_horizons_are_grounded() -> None:
     assert check_grounding(text, facts).status == "pass"
 
 
+def test_small_integers_that_are_not_horizons_or_plan_facts_are_ungrounded() -> None:
+    # WR-04: small integers must not pass just because they are small. The draft has 2 groups, 2
+    # routes and 7 validators; "V5"/"V8" ordinals in validator ids no longer ground a stray 5/8.
+    facts = _facts(_draft_payload())
+
+    for text in ("5 routes were blocked", "4 groups", "8 vehicles", "9 shelters are available"):
+        result = check_grounding(text, facts)
+        assert result.status == "fail", text
+    assert check_grounding("2 shelters, 2 routes, V5 and V8 checked", facts).status == "pass"
+
+
 @given(
     names=st.lists(
         st.text(alphabet="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghij", min_size=3, max_size=8),
