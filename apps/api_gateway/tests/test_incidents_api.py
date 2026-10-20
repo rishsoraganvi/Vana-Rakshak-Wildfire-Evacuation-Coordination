@@ -38,6 +38,7 @@ class FakeConnection:
 
     def execute(self, statement, parameters=None):
         sql = " ".join(str(statement).split())
+        self.engine.executed_sql.append(sql)
         if "FROM incidents i" in sql:
             return FakeResult(self.engine.incidents)
         if "FROM plan_versions p" in sql:
@@ -58,6 +59,7 @@ class FakeEngine:
         self.audit_entries = list(audit_entries)
         self.incident_exists = incident_exists
         self.latest_hotspot = None
+        self.executed_sql: list[str] = []
 
     @contextmanager
     def connect(self):
@@ -103,6 +105,20 @@ def test_list_incidents_serializes_summary_fields() -> None:
     assert response.json()[0]["incident_id"] == str(incident_id)
     assert response.json()[0]["hotspot_count"] == 5
     assert response.json()[0]["is_simulated"] is True
+
+
+def test_list_incidents_counts_hotspots_only_from_new_hotspot_triggers() -> None:
+    # WR-02: re-plan triggers (perimeter_change, road_blocked, ...) carry no hotspot_ids, so the
+    # hotspot_count subquery must not read the latest trigger of an arbitrary type.
+    engine = FakeEngine()
+
+    with make_client(engine) as client:
+        assert client.get("/api/v1/incidents").status_code == 200
+
+    (sql,) = engine.executed_sql
+    count_subquery = sql.split("jsonb_array_length((", 1)[1].split(") AS hotspot_count", 1)[0]
+    assert "t.details -> 'hotspot_ids'" in count_subquery
+    assert "t.type = 'new_hotspot'" in count_subquery
 
 
 def test_plan_endpoint_returns_404_for_unknown_plan() -> None:

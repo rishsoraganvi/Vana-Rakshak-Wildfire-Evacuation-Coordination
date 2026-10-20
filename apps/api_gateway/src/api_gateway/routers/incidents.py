@@ -139,7 +139,7 @@ def create_incidents_router() -> APIRouter:
                    )) AS updated_at,
                    COALESCE(jsonb_array_length((
                        SELECT t.details -> 'hotspot_ids' FROM triggers t
-                       WHERE t.incident_id = i.id
+                       WHERE t.incident_id = i.id AND t.type = 'new_hotspot'
                        ORDER BY t.detected_at DESC LIMIT 1
                    )), 0) AS hotspot_count,
                        (i.origin::text IN ('replay', 'simulated')) AS is_simulated
