@@ -49,7 +49,9 @@ def test_phase_one_schema_boundary() -> None:
         "audit_log",
     }
     assert phase_one_tables <= tables
-    assert not tables & {"plans", "plan_reviews", "shelters", "vehicles"}
+    # Phase 3 migration 0006 adds shelters; review and vehicle tables arrive in later phases.
+    assert "shelters" in tables
+    assert not tables & {"plans", "plan_reviews", "vehicles"}
 
     for table_name, column_name in (
         ("areas_of_interest", "geom"),
