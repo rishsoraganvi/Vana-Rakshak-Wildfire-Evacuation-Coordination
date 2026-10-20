@@ -46,6 +46,23 @@ Provide curated CSVs with the same columns, give each row a real `capacity_sourc
 Existing synthetic rows with `SYN-` references stay in the database until removed, so deactivate
 or delete them when switching to real data. Plan 03-12 holds the human checkpoint for this swap.
 
+## Real-data status
+
+Run the offline readiness probe (no network, never downloads) to see which real-data steps remain:
+
+```
+uv run python scripts/check_real_data.py
+```
+
+It reports whether the OSM graph is built at `osm_cache_path`, and whether each seed CSV is
+`synthetic`, `curated` or `mixed` (from `capacity_source` / `pop_source`). Exit code 0 means ready,
+1 means something is still pending. Pending is not an error, so CI never runs it as a gate.
+
+| Item | Status | Resolved by |
+|------|--------|-------------|
+| OSM graph | pending (synthetic fixture used in CI) | `uv run python scripts/build_osm_graph.py` (plan 03-12) |
+| Shelter and settlement seed | synthetic | curated CSVs, or explicit deferral (D-18, plan 03-12) |
+
 ## OpenStreetMap drive network
 
 - Source: OpenStreetMap road data downloaded through OSMnx.
