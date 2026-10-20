@@ -61,7 +61,7 @@ It reports whether the OSM graph is built at `osm_cache_path`, and whether each 
 | Item | Status | Resolved by |
 |------|--------|-------------|
 | OSM graph | built 2026-10-20: 570 nodes, 1415 edges (see build record below) | `uv run python scripts/build_osm_graph.py` (plan 03-12) |
-| Shelter and settlement seed | synthetic | curated CSVs, or explicit deferral (D-18, plan 03-12) |
+| Shelter and settlement seed | real names and locations from OpenStreetMap, capacities and populations still synthetic (see seed record below) | district shelter survey and Census figures replacing the `synthetic` numbers (D-18) |
 
 ### OSM graph build record (plan 03-12, 2026-10-20)
 
@@ -100,6 +100,25 @@ It reports whether the OSM graph is built at `osm_cache_path`, and whether each 
 - `scripts/replay_demo.py` forces `OSM_CACHE_PATH` to `tests/fixtures/osm/bandipur_stub.graphml`,
   so the replay demo and CI use the stub fixture and do not exercise the real graph. Production
   planning reads `settings.osm_cache_path`, which is the real graph.
+
+### Seed record (plan 03-12, 2026-10-20)
+
+- The SYN-* placeholder rows were replaced with real places from OpenStreetMap (ODbL), fetched
+  2026-10-20 within 10 km of 11.72 N, 76.64 E. `external_ref` carries the OSM element
+  (`OSM-N<node id>` / `OSM-W<way id>`) so every row is traceable.
+- Shelters: the 20 nearest named schools. Generic names get the nearest OSM place appended, for example
+  "(near Hangala)". OSM has no capacity tags here, so capacity is a type-based estimate: higher primary 250,
+  lower primary 120, PU college 400, residential tribal school 200. The PU college and higher
+  primary school at Hangala are about 70 m apart and likely share a campus, so each has `usable_factor` 0.5.
+- Settlements: the 10 nearest named villages and hamlets whose nearest road node on the real graph is within
+  1800 m (margin under the 2000 m snap limit). The farthest is Hangalada Hosahalli at 436 m. OSM has no
+  population tags here, so population is an estimate: village 600, hamlet 250.
+- Every estimated number keeps `capacity_source` / `pop_source` = `synthetic` and `is_simulated`
+  true. As a result, plans still carry the S9 warning "Shelter capacities/populations are estimates
+  (synthetic); verify before use", and `check_real_data.py` still reports the seed as synthetic. This is
+  deliberate: a capacity nobody surveyed must not be shown as curated.
+- To finish D-18, replace each `synthetic` number with a sourced figure (district survey, Census
+  2011), set the source string and `is_simulated` false, then rerun the seed scripts.
 
 ## OpenStreetMap drive network
 
