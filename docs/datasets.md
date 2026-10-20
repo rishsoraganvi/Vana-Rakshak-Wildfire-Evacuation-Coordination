@@ -60,8 +60,46 @@ It reports whether the OSM graph is built at `osm_cache_path`, and whether each 
 
 | Item | Status | Resolved by |
 |------|--------|-------------|
-| OSM graph | pending (synthetic fixture used in CI) | `uv run python scripts/build_osm_graph.py` (plan 03-12) |
+| OSM graph | built 2026-10-20: 570 nodes, 1415 edges (see build record below) | `uv run python scripts/build_osm_graph.py` (plan 03-12) |
 | Shelter and settlement seed | synthetic | curated CSVs, or explicit deferral (D-18, plan 03-12) |
+
+### OSM graph build record (plan 03-12, 2026-10-20)
+
+- Built at `data/osm/bandipur_road_graph.graphml` (git-ignored). `build_osm_graph.py --check` exits 0
+  and the probe reports the graph as built.
+- Size: 570 nodes, 1415 edges, bounding box lon 76.5648 to 76.7295, lat 11.6417 to 11.8050.
+- Node-count note: RESEARCH A17 expected 5-20k nodes. 570 is much smaller. The likely cause (not
+  separately verified) is a sparse reserve road network, and the build keeps only the largest strongly connected
+  component, so isolated or one-way-trapped road fragments are dropped. The user accepted this
+  size. It is a data property, not a build failure.
+- k-path timing (Pitfall 13): one k=3 query across the graph extent (about 19.2 km straight line,
+  best path about 2840 s travel time) took 0.016 s with a prebuilt collapsed digraph, and 0.063 s
+  including the collapse. `k_paths_max_leg_s` is 5.0 s, so there is no warning: the leg is far
+  under the limit and was not truncated (3 distinct paths returned).
+- Settlement reachability (diagnostic, not a fix): coordinator routing snaps each settlement to the
+  nearest road node outside the fire perimeter within `max_snap_distance_m` (2000 m), otherwise it
+  raises `unroutable_group`. Straight-line distance from each synthetic settlement to its nearest
+  graph node (ignoring the perimeter exclusion, so real runs can only be worse):
+
+  | Settlement | Nearest node | Within 2000 m |
+  |------------|--------------|---------------|
+  | SYN-ST-01 | 599 m | yes |
+  | SYN-ST-02 | 1270 m | yes |
+  | SYN-ST-03 | 320 m | yes |
+  | SYN-ST-04 | 531 m | yes |
+  | SYN-ST-05 | 1623 m | yes |
+  | SYN-ST-06 | 1232 m | yes |
+  | SYN-ST-07 | 2002 m | no (by 2 m) |
+  | SYN-ST-08 | 668 m | yes |
+  | SYN-ST-09 | 493 m | yes |
+  | SYN-ST-10 | 2558 m | no |
+
+  On the real graph SYN-ST-07 and SYN-ST-10 would be `unroutable_group` regardless of the fire.
+  Curated settlements must lie within 2000 m of a road node, or `max_snap_distance_m` must be
+  raised deliberately.
+- `scripts/replay_demo.py` forces `OSM_CACHE_PATH` to `tests/fixtures/osm/bandipur_stub.graphml`,
+  so the replay demo and CI use the stub fixture and do not exercise the real graph. Production
+  planning reads `settings.osm_cache_path`, which is the real graph.
 
 ## OpenStreetMap drive network
 
