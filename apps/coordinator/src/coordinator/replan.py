@@ -10,6 +10,16 @@ nothing.
 
 Phase 3 has no approved plan (approval arrives in Phase 4), so every comparison is against the
 latest non-superseded plan: ``pending_review`` or ``failed``.
+
+Precondition (the observation is evidence for detection only): ``replan_incident`` re-runs the
+whole coordinator, which re-derives every input from stored data (hotspots, the repository's
+``edge_statuses()`` and ``shelters()``, weather). It never reads the ``ReplanObservation``.
+Callers must therefore persist the new road edge statuses and shelter states before calling
+``check_and_replan`` / ``replan_incident``, or the re-plan can be a silent ``no_change``. A
+``perimeter_change`` is likewise re-simulated from the stored hotspots and weather; Phase 3 has
+no producer that stores an observed perimeter, so a perimeter trigger only changes the plan when
+the stored inputs already differ (for example new hotspots linked to the incident by the Phase 5
+worker).
 """
 
 from __future__ import annotations
