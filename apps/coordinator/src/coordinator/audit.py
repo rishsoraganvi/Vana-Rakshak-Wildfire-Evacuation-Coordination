@@ -9,6 +9,8 @@ from uuid import UUID
 from sqlalchemy import text
 from sqlalchemy.engine import Connection
 
+RUN_FAILED_NODE = "run_failed"  # marker row written by runner._flush_failed_run
+
 
 def flush_audit_entries(entries: Sequence[dict[str, Any]], session: Connection) -> None:
     if not entries:
@@ -20,6 +22,7 @@ def flush_audit_entries(entries: Sequence[dict[str, Any]], session: Connection) 
             "incident_id": UUID(entry["incident_id"]),
             "run_id": UUID(entry["run_id"]),
             "agent": entry.get("agent", "coordinator"),
+            "status": "failed" if entry["node_name"] == RUN_FAILED_NODE else "succeeded",
             "node_name": entry["node_name"],
             "agent_input": entry["inputs_json"],
             "agent_output": entry["outputs_json"],
@@ -40,7 +43,7 @@ def flush_audit_entries(entries: Sequence[dict[str, Any]], session: Connection) 
                 (id, incident_id, agent, status, input, output, latency_ms,
                  run_id, node_name, model_metadata, created_at)
             VALUES
-                (:id, :incident_id, CAST(:agent AS agent_name), 'succeeded',
+                (:id, :incident_id, CAST(:agent AS agent_name), CAST(:status AS run_status),
                  CAST(:agent_input AS jsonb), CAST(:agent_output AS jsonb), :latency_ms,
                  :run_id, :node_name, CAST(:model_metadata AS jsonb), :created_at)
             ON CONFLICT (id) DO NOTHING

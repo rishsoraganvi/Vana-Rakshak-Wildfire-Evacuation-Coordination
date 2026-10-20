@@ -81,6 +81,18 @@ def test_each_entry_is_written_with_its_own_agent() -> None:
     ]
 
 
+def test_run_failed_marker_is_stored_as_failed_and_other_rows_as_succeeded() -> None:
+    # WR-09: status used to be hard-coded to 'succeeded', hiding crashed runs from status filters.
+    session = FakeSession()
+
+    flush_audit_entries(
+        [_entry(node_name="specialist_shelter"), _entry(node_name="run_failed")], session
+    )
+
+    assert "CAST(:status AS run_status)" in session.statement
+    assert [row["status"] for row in session.parameters] == ["succeeded", "failed"]
+
+
 def test_entry_without_agent_defaults_to_coordinator() -> None:
     session = FakeSession()
 

@@ -15,6 +15,7 @@ from typing import Any, cast
 from langgraph.graph import END, StateGraph
 from wildfire_core.schemas.phase2 import AuditEntry
 
+from coordinator.audit import RUN_FAILED_NODE
 from coordinator.deps import CoordinatorDeps, default_deps
 from coordinator.graph import NODE_ORDER, make_nodes
 from coordinator.state import CoordinatorState, initial_state
@@ -42,7 +43,7 @@ def _flush_failed_run(deps: CoordinatorDeps, last: CoordinatorState, error: Exce
     failure = AuditEntry(
         incident_id=last["incident_id"],
         run_id=last["run_id"],
-        node_name="run_failed",
+        node_name=RUN_FAILED_NODE,
         inputs_json="{}",
         outputs_json=json.dumps({"error": type(error).__name__}),
         latency_ms=0,
