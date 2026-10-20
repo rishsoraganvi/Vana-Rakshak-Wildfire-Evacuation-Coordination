@@ -12,6 +12,7 @@ from coordinator.replan import (
     detect_replan_triggers,
     replan_incident,
 )
+from coordinator.repository import StoredPlan
 from coordinator.runner import run_coordinator
 from pipeline_factory import (
     INCIDENT_ID,
@@ -134,6 +135,26 @@ def test_check_and_replan_below_threshold_does_nothing() -> None:
 
     assert check_and_replan(same, deps=deps) == []
     assert len(repo.plans[INCIDENT_ID]) == 1
+
+
+def test_check_and_replan_skips_a_phase2_predecessor_instead_of_crashing() -> None:
+    # WR-10: a stored schema-2.0 plan cannot be parsed as an IntegratedPlan.
+    settings = make_settings()
+    repo, deps, v1 = _first_plan(settings)
+    repo.plans[INCIDENT_ID] = [
+        StoredPlan(
+            plan_id="phase2-plan",
+            version=1,
+            status="draft",
+            plan_data={"incident_id": INCIDENT_ID, "routes": [], "rationale_md": "legacy"},
+        )
+    ]
+    observation = ReplanObservation(
+        incident_id=INCIDENT_ID, new_perimeter_wkt=_wide_perimeter(deps)
+    )
+
+    assert check_and_replan(observation, deps=deps) == []
+    assert [item.plan_id for item in repo.plans[INCIDENT_ID]] == ["phase2-plan"]
 
 
 @pytest.mark.parametrize("trigger_type", ["wind_shift", "scheduled_refresh", "manual"])

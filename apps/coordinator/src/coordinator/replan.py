@@ -36,6 +36,7 @@ from coordinator.runner import run_coordinator
 
 REPLAN_TRIGGER_TYPES = PHASE3_TRIGGER_TYPES
 _CONFLICT = "state_version_conflict"
+PLAN_SCHEMA_VERSION = "3.0"
 
 
 class ReplanObservation(BaseModel):
@@ -173,6 +174,10 @@ def check_and_replan(
     stored = deps.repository.latest_plan(observation.incident_id)
     if stored is None:
         return []  # nothing to compare with: the first plan comes from the new_hotspot trigger
+    if stored.plan_data.get("plan_schema_version") != PLAN_SCHEMA_VERSION:
+        # A Phase 2 predecessor has no Phase 3 footprint, routes or shelter snapshot to compare
+        # with (and diff.py always counts it as material), so no trigger can be evaluated.
+        return []
     latest = IntegratedPlan.model_validate(stored.plan_data)
     return [
         replan_incident(observation.incident_id, item.trigger_type, item.details, deps=deps)
