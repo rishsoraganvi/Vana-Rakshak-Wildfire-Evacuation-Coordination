@@ -8,6 +8,7 @@ runs over the same world never create a version churn.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from typing import Any
 
@@ -15,6 +16,8 @@ from wildfire_core.schemas.plan import IntegratedPlan, PlanDiff
 
 _SCHEMA_VERSION = "3.0"
 _ABSENT = "absent"
+# Cluster ids are fresh uuids on every run, so they are masked when comparing failure reasons.
+_UUID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", re.IGNORECASE)
 
 Signature = dict[str, Any]
 
@@ -55,11 +58,21 @@ def _validators(data: Mapping[str, Any]) -> dict[str, str]:
     return dict(sorted(result.items()))
 
 
+def _failure_reasons(data: Mapping[str, Any]) -> tuple[str, ...]:
+    """Sorted, uuid-masked failure reasons; only a failed plan has decision content here."""
+    if data.get("status") != "failed":
+        return ()
+    reasons = {_UUID.sub("<id>", str(reason)) for reason in data.get("failure_reasons") or ()}
+    return tuple(sorted(reasons))
+
+
 def material_signature(plan_like: IntegratedPlan | Mapping[str, Any]) -> Signature:
     """Deterministic, order-independent decision content of a plan.
 
     Holds sorted (group, shelter, persons) tuples, the node path per (group, shelter), validator
-    statuses and the plan status. Accepts an ``IntegratedPlan`` or its stored ``plan_data``.
+    statuses, the plan status and, for a failed plan, its failure reasons (so a different cause of
+    failure is a new version, not a silent no-change). Accepts an ``IntegratedPlan`` or its stored
+    ``plan_data``.
     """
     data = _as_mapping(plan_like)
     assignments = tuple((pair, persons) for pair, persons in _assignments(data).items())
@@ -68,6 +81,7 @@ def material_signature(plan_like: IntegratedPlan | Mapping[str, Any]) -> Signatu
         "routes": _paths(data),
         "validators": _validators(data),
         "status": data.get("status"),
+        "failure_reasons": _failure_reasons(data),
     }
 
 

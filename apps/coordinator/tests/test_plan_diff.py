@@ -125,6 +125,26 @@ def test_status_change_is_material() -> None:
     assert diff.is_material is True
 
 
+def _failed(reasons: list[str]) -> IntegratedPlan:
+    return build(failed_draft(reasons=reasons, results=[failing("V5", "x", "y")]))
+
+
+def test_failed_plans_with_different_causes_are_material() -> None:
+    # WR-12: same validators, no routes or assignments, different failure reason.
+    old = _failed(["weather_unavailable:cluster-a"])
+    new = _failed(["specialist_unavailable:traffic_routing"])
+
+    assert is_material_change(old.model_dump(mode="json"), new) is True
+    assert plan_diff(old.model_dump(mode="json"), new).is_material is True
+
+
+def test_failed_plans_with_the_same_cause_are_not_material_even_with_fresh_cluster_uuids() -> None:
+    old = _failed(["weather_unavailable:11111111-1111-4111-8111-111111111111", "b"])
+    same = _failed(["b", "weather_unavailable:22222222-2222-4222-8222-222222222222"])
+
+    assert is_material_change(old.model_dump(mode="json"), same) is False
+
+
 def test_phase2_predecessor_and_missing_previous_are_always_material() -> None:
     new = build()
     phase2: dict[str, Any] = {
