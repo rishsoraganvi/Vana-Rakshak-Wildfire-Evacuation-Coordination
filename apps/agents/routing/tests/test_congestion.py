@@ -167,6 +167,19 @@ def test_apply_congestion_slows_loaded_edges_and_refreshes_horizon_costs() -> No
     assert loaded["cost_h6"] == pytest.approx(base * 1.15)
 
 
+def test_apply_congestion_rejects_zero_capacity_instead_of_dividing_by_zero() -> None:
+    # WR-11: a zero lane capacity used to raise ZeroDivisionError mid-plan.
+    with pytest.raises(ValueError, match="non-positive capacity"):
+        apply_congestion(
+            _horizon_graph(),
+            {},
+            alpha=0.15,
+            beta=4.0,
+            lane_capacity={**LANE_CAPACITY, "primary": 0, "default": 0},
+            link_factor=LINK_FACTOR,
+        )
+
+
 def test_apply_congestion_leaves_unloaded_edges_at_free_flow() -> None:
     graph = _horizon_graph()
 

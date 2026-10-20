@@ -138,6 +138,8 @@ def apply_congestion(
     max_vc = 0.0
     for u, v, key, data in graph.edges(keys=True, data=True):
         capacity = edge_capacity_vph(data, lane_capacity=lane_capacity, link_factor=link_factor)
+        if capacity <= 0:
+            raise ValueError(f"edge ({u}, {v}, {key}) has non-positive capacity {capacity!r} vph")
         flow = float(flows.get((u, v, key), 0.0))
         free_flow = float(data["travel_time"])
         data["vc_ratio"] = flow / capacity

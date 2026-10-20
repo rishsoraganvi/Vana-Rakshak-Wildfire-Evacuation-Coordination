@@ -126,6 +126,16 @@ class Settings(BaseModel):
             raise ValueError("fix_menu_order must be exactly next_path, rematch and split (D-09)")
         if "default" not in self.lane_capacity_vph:
             raise ValueError("lane_capacity_vph needs a 'default' key")
+        if any(capacity <= 0 for capacity in self.lane_capacity_vph.values()):
+            raise ValueError("lane_capacity_vph values must be positive")
+        if not 0 < self.link_capacity_factor <= 1:
+            raise ValueError("link_capacity_factor must be in (0, 1]")
+        if self.bpr_alpha < 0 or self.bpr_beta < 0:
+            raise ValueError("bpr_alpha and bpr_beta must be >= 0")
+        if self.k_paths_max_leg_s < 0:
+            raise ValueError("k_paths_max_leg_s must be >= 0")
+        if self.max_snap_distance_m < 0 or self.shelter_exclusion_buffer_m < 0:
+            raise ValueError("max_snap_distance_m and shelter_exclusion_buffer_m must be >= 0")
         if self.trigger_debounce_s < 0:
             raise ValueError("trigger_debounce_s must be >= 0")
         if not 0 < self.perimeter_iou_threshold <= 1:
