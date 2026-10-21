@@ -10,3 +10,9 @@ __pycache__/
 GUIDE.md
 data/
 cache/
+
+# Local interview prep notes
+/interview.md
+
+# GSD run-scoped runtime state (rewritten per dispatch)
+/.gsd/
